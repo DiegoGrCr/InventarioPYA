@@ -39,8 +39,8 @@ export default async function BanoDetailPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-        <div style={{ position: 'relative', borderRadius: 'var(--radius)', overflow: 'hidden', background: 'var(--bg)', height: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="detail-grid">
+        <div className="detail-image">
           {bano.image_url ? (
             <img src={bano.image_url} alt={bano.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', padding: '20px' }} />
           ) : (

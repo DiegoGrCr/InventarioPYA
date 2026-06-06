@@ -40,8 +40,8 @@ export default async function AccesorioDetailPage({ params }: { params: Promise<
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-        <div style={{ position: 'relative', borderRadius: 'var(--radius)', overflow: 'hidden', background: 'var(--bg)', height: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="detail-grid">
+        <div className="detail-image">
           {acc.image_url ? (
             <img src={acc.image_url} alt={acc.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', padding: '20px' }} />
           ) : (
