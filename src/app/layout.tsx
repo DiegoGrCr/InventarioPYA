@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import AppShell from '@/components/layout/AppShell'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
+import InstallPrompt from '@/components/InstallPrompt'
 
 export const metadata: Metadata = {
   title: 'Pisos y Azulejos de Jalpan',
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <AppShell>{children}</AppShell>
         <ServiceWorkerRegistration />
+        <InstallPrompt />
       </body>
     </html>
   )
