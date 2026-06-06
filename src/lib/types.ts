@@ -53,6 +53,21 @@ export interface Accessory {
   updated_at: string
 }
 
+export interface BanoProduct {
+  id: string
+  name: string
+  brand: string | null
+  model: string | null
+  color: string | null
+  description: string | null
+  image_url: string | null
+  stock: number
+  price: number | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type MaterialType = 'ceramica' | 'porcelana'
 export type AccessoryCategory = 'adhesivo' | 'boquilla'
 

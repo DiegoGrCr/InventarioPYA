@@ -20,10 +20,10 @@ export default async function AccesoriosPage({ searchParams }: { searchParams: P
     <div className="fade-in">
       <div className="page-header">
         <div>
-          <h1>Accesorios</h1>
+          <h1>Complementos</h1>
           <p>Adhesivos y boquillas</p>
         </div>
-        <Link href="/accesorios/nuevo" className="btn btn-primary"><Plus size={16} /> Nuevo Accesorio</Link>
+        <Link href="/complementos/nuevo" className="btn btn-primary"><Plus size={16} /> Nuevo Accesorio</Link>
       </div>
 
       <AccessoryTabs currentTab={tab} />
@@ -34,12 +34,14 @@ export default async function AccesoriosPage({ searchParams }: { searchParams: P
             const ss = getStockStatus(acc.stock)
             const bc = ss === 'available' ? 'badge-success' : ss === 'low' ? 'badge-warning' : 'badge-danger'
             return (
-              <div key={acc.id} className="card fade-in">
-                {acc.image_url ? (
-                  <img src={acc.image_url} alt={acc.name} className="card-image" />
-                ) : (
-                  <div className="card-image-placeholder">{tab === 'adhesivo' ? <Droplets size={48} strokeWidth={1} /> : <PaintBucket size={48} strokeWidth={1} />}</div>
-                )}
+              <Link key={acc.id} href={`/complementos/${acc.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
+                <div className="card-image-wrapper">
+                  {acc.image_url ? (
+                    <img src={acc.image_url} alt={acc.name} className="card-image" />
+                  ) : (
+                    <div className="card-image-placeholder">{tab === 'adhesivo' ? <Droplets size={48} strokeWidth={1} /> : <PaintBucket size={48} strokeWidth={1} />}</div>
+                  )}
+                </div>
                 <div className="card-body">
                   <h3 className="card-title">{acc.name}</h3>
                   <div className="card-meta">
@@ -48,13 +50,13 @@ export default async function AccesoriosPage({ searchParams }: { searchParams: P
                     {acc.weight && <span className="badge badge-primary">{acc.weight}</span>}
                   </div>
                   {acc.brand && <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{acc.brand}</p>}
-                  {acc.description && <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{acc.description}</p>}
+                  {acc.description && <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{acc.description}</p>}
                 </div>
                 <div className="card-footer">
                   <span style={{ fontWeight: 700 }}>{formatPrice(acc.price)}</span>
                   <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Stock: {acc.stock}</span>
                 </div>
-              </div>
+              </Link>
             )
           })}
         </div>
@@ -63,7 +65,7 @@ export default async function AccesoriosPage({ searchParams }: { searchParams: P
           <div className="empty-state-icon">{tab === 'adhesivo' ? <Droplets size={48} strokeWidth={1} /> : <PaintBucket size={48} strokeWidth={1} />}</div>
           <h3>Sin {tab === 'adhesivo' ? 'adhesivos' : 'boquillas'} aún</h3>
           <p>Agrega tu primer {tab === 'adhesivo' ? 'adhesivo' : 'boquilla'}</p>
-          <Link href="/accesorios/nuevo" className="btn btn-primary"><Plus size={16} /> Agregar</Link>
+          <Link href="/complementos/nuevo" className="btn btn-primary"><Plus size={16} /> Agregar</Link>
         </div>
       )}
     </div>

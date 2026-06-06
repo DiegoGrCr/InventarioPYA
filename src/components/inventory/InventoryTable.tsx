@@ -162,7 +162,7 @@ export default function InventoryTable({ products, accessories, brands, sizes }:
 
       <div className="tabs">
         <button className={`tab ${tab === 'pisos' ? 'active' : ''}`} onClick={() => setTab('pisos')}><Layers size={15} /> Pisos ({products.length})</button>
-        <button className={`tab ${tab === 'accesorios' ? 'active' : ''}`} onClick={() => setTab('accesorios')}><Package size={15} /> Accesorios ({accessories.length})</button>
+        <button className={`tab ${tab === 'accesorios' ? 'active' : ''}`} onClick={() => setTab('accesorios')}><Package size={15} /> Complementos ({accessories.length})</button>
       </div>
 
       <div className="table-container">

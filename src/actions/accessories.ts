@@ -37,7 +37,31 @@ export async function createAccessory(formData: FormData) {
   })
 
   if (error) return { error: error.message }
-  revalidatePath('/accesorios')
+  revalidatePath('/complementos')
+  revalidatePath('/')
+  return { success: true }
+}
+
+export async function updateAccessory(id: string, formData: FormData) {
+  const supabase = await createServerSupabaseClient()
+
+  const imageUrl = (formData.get('image_url') as string) || null
+
+  const { error } = await supabase.from('accessories').update({
+    name: formData.get('name') as string,
+    description: (formData.get('description') as string) || null,
+    category: formData.get('category') as string,
+    brand: (formData.get('brand') as string) || null,
+    weight: (formData.get('weight') as string) || null,
+    color: (formData.get('color') as string) || null,
+    stock: parseInt(formData.get('stock') as string) || 0,
+    price: parseFloat(formData.get('price') as string) || null,
+    image_url: imageUrl || undefined,
+  }).eq('id', id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/complementos')
+  revalidatePath(`/complementos/${id}/editar`)
   revalidatePath('/')
   return { success: true }
 }
@@ -46,7 +70,7 @@ export async function updateAccessoryStock(id: string, stock: number) {
   const supabase = await createServerSupabaseClient()
   const { error } = await supabase.from('accessories').update({ stock }).eq('id', id)
   if (error) return { error: error.message }
-  revalidatePath('/accesorios')
+  revalidatePath('/complementos')
   revalidatePath('/inventario')
   revalidatePath('/')
   return { success: true }
@@ -56,7 +80,7 @@ export async function deleteAccessory(id: string) {
   const supabase = await createServerSupabaseClient()
   const { error } = await supabase.from('accessories').update({ is_active: false }).eq('id', id)
   if (error) return { error: error.message }
-  revalidatePath('/accesorios')
+  revalidatePath('/complementos')
   revalidatePath('/')
   return { success: true }
 }

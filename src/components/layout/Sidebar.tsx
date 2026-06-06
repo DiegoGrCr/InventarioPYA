@@ -5,14 +5,15 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Layers, Package, ClipboardList,
-  Tag, Ruler, Calculator,
+  Tag, Ruler, Calculator, Toilet,
 } from 'lucide-react'
 
 const navItems = [
-  { label: 'Dashboard',   href: '/',           icon: LayoutDashboard },
+  { label: 'Dashboard',   href: '/',            icon: LayoutDashboard },
   { section: 'Catálogo' },
-  { label: 'Pisos',       href: '/pisos',       icon: Layers },
-  { label: 'Accesorios',  href: '/accesorios',  icon: Package },
+  { label: 'Pisos',       href: '/pisos',        icon: Layers },
+  { label: 'Baños',       href: '/banos',        icon: Toilet },
+  { label: 'Complementos', href: '/complementos', icon: Package },
   { section: 'Gestión' },
   { label: 'Inventario',  href: '/inventario',  icon: ClipboardList },
   { label: 'Marcas',      href: '/marcas',      icon: Tag },

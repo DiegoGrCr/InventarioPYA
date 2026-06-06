@@ -1,19 +1,21 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Layers, Package, AlertTriangle, Tag, PackageOpen, Plus, Ruler, Calculator } from 'lucide-react'
+import { Layers, Package, AlertTriangle, Tag, PackageOpen, Plus, Ruler, Calculator, Toilet } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
 
-  const [productsRes, accessoriesRes, lowStockRes, brandsRes] = await Promise.all([
+  const [productsRes, accessoriesRes, banosRes, lowStockRes, brandsRes] = await Promise.all([
     supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('accessories').select('id', { count: 'exact', head: true }).eq('is_active', true),
+    supabase.from('bano_products').select('id', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true).lte('stock', 5),
     supabase.from('brands').select('id', { count: 'exact', head: true }),
   ])
 
   const totalProducts = productsRes.count || 0
   const totalAccessories = accessoriesRes.count || 0
+  const totalBanos = banosRes.count || 0
   const lowStock = lowStockRes.count || 0
   const totalBrands = brandsRes.count || 0
 
@@ -35,34 +37,41 @@ export default async function DashboardPage() {
       </div>
 
       <div className="stats-grid">
-        <div className="stat-card">
+        <Link href="/pisos" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-icon primary"><Layers size={22} /></div>
           <div className="stat-info">
             <h3>{totalProducts}</h3>
             <p>Pisos en catálogo</p>
           </div>
-        </div>
-        <div className="stat-card">
+        </Link>
+        <Link href="/banos" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+          <div className="stat-icon accent"><Toilet size={22} /></div>
+          <div className="stat-info">
+            <h3>{totalBanos}</h3>
+            <p>Baños</p>
+          </div>
+        </Link>
+        <Link href="/complementos" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-icon accent"><Package size={22} /></div>
           <div className="stat-info">
             <h3>{totalAccessories}</h3>
-            <p>Accesorios</p>
+            <p>Complementos</p>
           </div>
-        </div>
-        <div className="stat-card">
+        </Link>
+        <Link href="/inventario" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-icon warning"><AlertTriangle size={22} /></div>
           <div className="stat-info">
             <h3>{lowStock}</h3>
             <p>Stock bajo</p>
           </div>
-        </div>
-        <div className="stat-card">
+        </Link>
+        <Link href="/marcas" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
           <div className="stat-icon success"><Tag size={22} /></div>
           <div className="stat-info">
             <h3>{totalBrands}</h3>
             <p>Marcas</p>
           </div>
-        </div>
+        </Link>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -102,7 +111,7 @@ export default async function DashboardPage() {
       )}
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '32px', flexWrap: 'wrap' }}>
-        <Link href="/accesorios/nuevo" className="btn btn-secondary"><Package size={16} /> Nuevo Accesorio</Link>
+        <Link href="/complementos/nuevo" className="btn btn-secondary"><Package size={16} /> Nuevo Complemento</Link>
         <Link href="/marcas" className="btn btn-secondary"><Tag size={16} /> Gestionar Marcas</Link>
         <Link href="/medidas" className="btn btn-secondary"><Ruler size={16} /> Gestionar Medidas</Link>
         <Link href="/calculadora" className="btn btn-secondary"><Calculator size={16} /> Calculadora</Link>

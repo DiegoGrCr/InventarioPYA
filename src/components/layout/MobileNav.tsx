@@ -2,14 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Layers, Package, ClipboardList, Calculator } from 'lucide-react'
+import { LayoutDashboard, Layers, Package, ClipboardList, Calculator, Toilet } from 'lucide-react'
 
 const mobileItems = [
-  { label: 'Inicio',      href: '/',           icon: LayoutDashboard },
-  { label: 'Pisos',       href: '/pisos',       icon: Layers },
-  { label: 'Accesorios',  href: '/accesorios',  icon: Package },
-  { label: 'Inventario',  href: '/inventario',  icon: ClipboardList },
-  { label: 'Calc',        href: '/calculadora', icon: Calculator },
+  { label: 'Inicio',      href: '/',            icon: LayoutDashboard },
+  { label: 'Pisos',       href: '/pisos',        icon: Layers },
+  { label: 'Baños',       href: '/banos',        icon: Toilet },
+  { label: 'Complementos', href: '/complementos', icon: Package },
+  { label: 'Inventario',  href: '/inventario',   icon: ClipboardList },
 ]
 
 export default function MobileNav() {
