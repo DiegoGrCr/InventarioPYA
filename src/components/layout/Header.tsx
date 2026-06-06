@@ -11,27 +11,32 @@ export default function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const [value, setValue] = useState(searchParams.get('search') || '')
+  const [value, setValue] = useState(
+    pathname === '/buscar' ? (searchParams.get('q') || '') : ''
+  )
 
   useEffect(() => {
     if (document.activeElement !== inputRef.current) {
-      setValue(searchParams.get('search') || '')
+      setValue(pathname === '/buscar' ? (searchParams.get('q') || '') : '')
     }
-  }, [searchParams])
+  }, [pathname, searchParams])
 
   const handleChange = (text: string) => {
     setValue(text)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      if (pathname === '/pisos') {
-        const params = new URLSearchParams(searchParams.toString())
-        if (text) params.set('search', text)
-        else params.delete('search')
-        router.replace(`/pisos?${params.toString()}`)
-      } else if (text.trim()) {
-        router.push(`/pisos?search=${encodeURIComponent(text.trim())}`)
+      if (text.trim()) {
+        router.replace(`/buscar?q=${encodeURIComponent(text.trim())}`)
+      } else {
+        router.replace('/buscar')
       }
     }, 300)
+  }
+
+  const handleClear = () => {
+    setValue('')
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    router.replace('/buscar')
   }
 
   return (
@@ -44,13 +49,13 @@ export default function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
         <input
           ref={inputRef}
           type="text"
-          placeholder="Buscar productos, marcas..."
+          placeholder="Buscar pisos, baños, complementos..."
           value={value}
           onChange={e => handleChange(e.target.value)}
         />
         {value && (
           <button
-            onClick={() => { setValue(''); handleChange('') }}
+            onClick={handleClear}
             style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
             aria-label="Limpiar búsqueda"
           >
