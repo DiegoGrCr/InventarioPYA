@@ -26,6 +26,34 @@ export async function getProducts(filters?: {
   return data || []
 }
 
+const PAGE_SIZE = 12
+
+export async function getProductsPage(
+  filters: { material?: string; brand_id?: string; size_id?: string; search?: string },
+  page: number
+) {
+  const supabase = await createServerSupabaseClient()
+  const from = page * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+
+  let query = supabase
+    .from('products')
+    .select('*, brand:brands(*), size:sizes(*)')
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .range(from, to)
+
+  if (filters.material) query = query.eq('material', filters.material)
+  if (filters.brand_id) query = query.eq('brand_id', filters.brand_id)
+  if (filters.size_id) query = query.eq('size_id', filters.size_id)
+  if (filters.search) query = query.ilike('name', `%${filters.search}%`)
+
+  const { data, error } = await query
+  if (error) throw error
+  const products = data || []
+  return { products, hasMore: products.length === PAGE_SIZE }
+}
+
 export async function getProduct(id: string) {
   const supabase = await createServerSupabaseClient()
   const { data, error } = await supabase
