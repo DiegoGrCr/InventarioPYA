@@ -4,15 +4,20 @@ import InventoryTable from '@/components/inventory/InventoryTable'
 export default async function InventarioPage() {
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: products }, { data: accessories }, { data: brands }, { data: sizes }] = await Promise.all([
+  const [{ data: products }, { data: banos }, { data: accessories }, { data: brands }, { data: sizes }] = await Promise.all([
     supabase
       .from('products')
-      .select('id, name, stock, sku, material, brand_id, size_id, price_per_sqm, price_per_box, sqm_per_box, brand:brands(name), size:sizes(label)')
+      .select('id, name, stock, sku, material, brand_id, size_id, bodegas, price_per_sqm, price_per_box, sqm_per_box, brand:brands(name), size:sizes(label)')
+      .eq('is_active', true)
+      .order('stock', { ascending: true }),
+    supabase
+      .from('bano_products')
+      .select('id, name, stock, brand, model, color, bodegas, price')
       .eq('is_active', true)
       .order('stock', { ascending: true }),
     supabase
       .from('accessories')
-      .select('id, name, stock, category')
+      .select('id, name, stock, category, bodegas')
       .eq('is_active', true)
       .order('stock', { ascending: true }),
     supabase.from('brands').select('id, name').order('name'),
@@ -32,6 +37,7 @@ export default async function InventarioPage() {
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <InventoryTable
         products={(products || []) as any}
+        banos={(banos || []) as any}
         accessories={(accessories || []) as any}
         brands={(brands || []) as any}
         sizes={sortedSizes as any}
