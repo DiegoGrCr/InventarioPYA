@@ -938,14 +938,17 @@ input, select, textarea { font-family: inherit; }
   text-align: center;
   min-height: 50vh;
   padding: 32px 16px;
+  perspective: 800px;
 }
 
 .home-hero-logo {
   width: 84px;
   height: 84px;
-  border-radius: 18px;
+  border-radius: 50%;
   object-fit: cover;
   border: 1px solid var(--border);
+  transform-style: preserve-3d;
+  animation: coinFlip 7s ease-in-out infinite;
 }
 
 .home-hero-title {
@@ -1088,8 +1091,8 @@ input, select, textarea { font-family: inherit; }
 .marquee-card {
   position: relative;
   flex-shrink: 0;
-  width: 200px;
-  height: 150px;
+  width: 240px;
+  height: 220px;
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--border);
@@ -1135,9 +1138,11 @@ input, select, textarea { font-family: inherit; }
   to   { transform: translateX(-50%); }
 }
 
-@keyframes floatLogo {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-8px); }
+@keyframes coinFlip {
+  0%, 70%   { transform: translateY(0) rotateY(0deg); }
+  78%       { transform: translateY(-22px) rotateY(180deg); }
+  86%       { transform: translateY(0) rotateY(360deg); }
+  100%      { transform: translateY(0) rotateY(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {

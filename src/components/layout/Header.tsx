@@ -39,30 +39,34 @@ export default function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
     router.replace('/buscar')
   }
 
+  const isHome = pathname === '/'
+
   return (
     <header className="header">
       <button className="menu-toggle" onClick={onMenuToggle} aria-label="Menu">
         <Menu size={22} />
       </button>
-      <div className="header-search">
-        <span className="header-search-icon"><Search size={14} /></span>
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Buscar pisos, baños, complementos..."
-          value={value}
-          onChange={e => handleChange(e.target.value)}
-        />
-        {value && (
-          <button
-            onClick={handleClear}
-            style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-            aria-label="Limpiar búsqueda"
-          >
-            <X size={14} />
-          </button>
-        )}
-      </div>
+      {!isHome && (
+        <div className="header-search">
+          <span className="header-search-icon"><Search size={14} /></span>
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Buscar pisos, baños, complementos..."
+            value={value}
+            onChange={e => handleChange(e.target.value)}
+          />
+          {value && (
+            <button
+              onClick={handleClear}
+              style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              aria-label="Limpiar búsqueda"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
     </header>
   )
 }
