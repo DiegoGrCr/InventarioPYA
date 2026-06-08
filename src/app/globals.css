@@ -863,7 +863,8 @@ input, select, textarea { font-family: inherit; }
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); }
-  .sidebar.open { transform: translateX(0); }
+  .sidebar.open { transform: translateX(0); z-index: 200; }
+  .sidebar.open ~ .mobile-nav, .sidebar-overlay.open ~ .mobile-nav { display: none; }
   .sidebar-overlay.open { display: block; }
   .main-content { margin-left: 0; padding: 16px; padding-top: calc(var(--header-height) + 16px); padding-bottom: 80px; }
   .header { left: 0; padding: 0 16px; }
