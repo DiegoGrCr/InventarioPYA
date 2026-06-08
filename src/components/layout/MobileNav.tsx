@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Layers, Package, Calculator, Toilet, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, Layers, Package, Calculator, Toilet } from 'lucide-react'
 
 const mobileItems = [
   { label: 'Inicio',       href: '/',             icon: LayoutDashboard },
@@ -10,7 +10,6 @@ const mobileItems = [
   { label: 'Baños',        href: '/banos',         icon: Toilet },
   { label: 'Adhesivos',    href: '/complementos',  icon: Package },
   { label: 'Calculadora',  href: '/calculadora',   icon: Calculator },
-  { label: 'Admin',        href: '/admin',         icon: ShieldCheck },
 ]
 
 export default function MobileNav() {
