@@ -52,7 +52,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
     supabase.from('accessories')
       .select('id, name, image_url, price, stock, category, brand')
       .eq('is_active', true)
-      .or(`name.ilike.${like},description.ilike.${like},brand.ilike.${like}`)
+      .or(`name.ilike.${like},description.ilike.${like},brand.ilike.${like},color.ilike.${like}`)
       .limit(12),
   ])
 
