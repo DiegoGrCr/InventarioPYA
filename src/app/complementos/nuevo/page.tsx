@@ -1,10 +1,20 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useIsAdmin } from '@/contexts/AdminContext'
 import AccessoryForm from '@/components/accessories/AccessoryForm'
 
 export default function NuevoAccesorioPage() {
   const router = useRouter()
+  const isAdmin = useIsAdmin()
+
+  useEffect(() => {
+    if (!isAdmin) router.replace('/complementos')
+  }, [isAdmin, router])
+
+  if (!isAdmin) return null
+
   return (
     <div className="fade-in">
       <div className="page-header">

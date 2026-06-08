@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isAdminSession } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { formatPrice, getMaterialLabel, getStockStatus, getStockLabel } from '@/lib/utils'
@@ -8,6 +9,7 @@ import DeleteProductBtn from '@/components/products/DeleteProductBtn'
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
 
   const { data: product } = await supabase
@@ -31,10 +33,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             {product.sku && <p>SKU: {product.sku}</p>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <Link href={`/pisos/${id}/editar`} className="btn btn-secondary"><Pencil size={15} /> Editar</Link>
-          <DeleteProductBtn productId={id} />
-        </div>
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Link href={`/pisos/${id}/editar`} className="btn btn-secondary"><Pencil size={15} /> Editar</Link>
+            <DeleteProductBtn productId={id} />
+          </div>
+        )}
       </div>
 
       <div className="detail-grid">

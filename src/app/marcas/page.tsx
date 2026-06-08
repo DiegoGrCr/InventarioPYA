@@ -1,7 +1,11 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isAdminSession } from '@/lib/auth'
+import { redirect } from 'next/navigation'
 import BrandsManager from '@/components/management/BrandsManager'
 
 export default async function MarcasPage() {
+  if (!(await isAdminSession())) redirect('/pisos')
+
   const supabase = await createServerSupabaseClient()
   const { data: brands } = await supabase.from('brands').select('*').order('name')
 

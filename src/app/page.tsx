@@ -1,8 +1,12 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isAdminSession } from '@/lib/auth'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Layers, Package, AlertTriangle, Tag, PackageOpen, Plus, Ruler, Calculator, Toilet } from 'lucide-react'
 
 export default async function DashboardPage() {
+  if (!(await isAdminSession())) redirect('/pisos')
+
   const supabase = await createServerSupabaseClient()
 
   const [productsRes, accessoriesRes, banosRes, lowStockRes, brandsRes] = await Promise.all([

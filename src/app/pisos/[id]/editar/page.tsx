@@ -1,10 +1,13 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/auth'
+import { notFound, redirect } from 'next/navigation'
 import ProductForm from '@/components/products/ProductForm'
 import Link from 'next/link'
 
 export default async function EditarPisoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!(await isAdminSession())) redirect(`/pisos/${id}`)
+
   const supabase = await createServerSupabaseClient()
 
   const [productRes, brandsRes, sizesRes] = await Promise.all([

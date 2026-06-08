@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isAdminSession } from '@/lib/auth'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import ProductCard from '@/components/products/ProductCard'
@@ -6,6 +7,7 @@ import ProductFilters from '@/components/products/ProductFilters'
 
 export default async function PisosPage({ searchParams }: { searchParams: Promise<{ material?: string; brand_id?: string; size_id?: string; search?: string }> }) {
   const params = await searchParams
+  const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
 
   let query = supabase
@@ -30,7 +32,7 @@ export default async function PisosPage({ searchParams }: { searchParams: Promis
           <h1>Catálogo de Pisos</h1>
           <p>{products?.length || 0} productos encontrados</p>
         </div>
-        <Link href="/pisos/nuevo" className="btn btn-primary">+ Nuevo Piso</Link>
+        {isAdmin && <Link href="/pisos/nuevo" className="btn btn-primary">+ Nuevo Piso</Link>}
       </div>
 
       <Suspense fallback={<div className="filters-bar" style={{ height: '42px' }} />}>
@@ -51,8 +53,8 @@ export default async function PisosPage({ searchParams }: { searchParams: Promis
         <div className="empty-state">
           <div className="empty-state-icon">🔍</div>
           <h3>No se encontraron pisos</h3>
-          <p>Intenta cambiar los filtros o agrega un nuevo producto</p>
-          <Link href="/pisos/nuevo" className="btn btn-primary">+ Agregar Piso</Link>
+          <p>Intenta cambiar los filtros{isAdmin ? ' o agrega un nuevo producto' : ''}</p>
+          {isAdmin && <Link href="/pisos/nuevo" className="btn btn-primary">+ Agregar Piso</Link>}
         </div>
       )}
     </div>

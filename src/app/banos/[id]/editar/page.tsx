@@ -1,10 +1,13 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/auth'
+import { notFound, redirect } from 'next/navigation'
 import BanoForm from '@/components/banos/BanoForm'
 import Link from 'next/link'
 
 export default async function EditarBanoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!(await isAdminSession())) redirect(`/banos/${id}`)
+
   const supabase = await createServerSupabaseClient()
 
   const { data: bano } = await supabase

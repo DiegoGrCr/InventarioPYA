@@ -1,10 +1,13 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { isAdminSession } from '@/lib/auth'
+import { notFound, redirect } from 'next/navigation'
 import AccessoryForm from '@/components/accessories/AccessoryForm'
 import Link from 'next/link'
 
 export default async function EditarAccesorioPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!(await isAdminSession())) redirect(`/complementos/${id}`)
+
   const supabase = await createServerSupabaseClient()
 
   const { data: accessory } = await supabase

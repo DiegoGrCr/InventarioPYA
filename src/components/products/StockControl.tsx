@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { updateProductStock } from '@/actions/products'
+import { useIsAdmin } from '@/contexts/AdminContext'
 
 interface StockControlProps {
   productId: string
@@ -11,6 +12,7 @@ interface StockControlProps {
 export default function StockControl({ productId, initialStock }: StockControlProps) {
   const [stock, setStock] = useState(initialStock)
   const [saving, setSaving] = useState(false)
+  const isAdmin = useIsAdmin()
 
   const updateStock = async (newStock: number) => {
     if (newStock < 0) return
@@ -18,6 +20,10 @@ export default function StockControl({ productId, initialStock }: StockControlPr
     setSaving(true)
     await updateProductStock(productId, newStock)
     setSaving(false)
+  }
+
+  if (!isAdmin) {
+    return <span className="stock-value">{stock}</span>
   }
 
   return (

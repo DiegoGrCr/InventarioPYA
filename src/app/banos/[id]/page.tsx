@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isAdminSession } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { formatPrice, getStockStatus, getStockLabel } from '@/lib/utils'
@@ -8,6 +9,7 @@ import DeleteBanoBtn from '@/components/banos/DeleteBanoBtn'
 
 export default async function BanoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
 
   const { data: bano } = await supabase
@@ -31,12 +33,14 @@ export default async function BanoDetailPage({ params }: { params: Promise<{ id:
             {bano.model && <p>Mod. {bano.model}</p>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <Link href={`/banos/${id}/editar`} className="btn btn-secondary">
-            <Pencil size={15} /> Editar
-          </Link>
-          <DeleteBanoBtn banoId={id} />
-        </div>
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Link href={`/banos/${id}/editar`} className="btn btn-secondary">
+              <Pencil size={15} /> Editar
+            </Link>
+            <DeleteBanoBtn banoId={id} />
+          </div>
+        )}
       </div>
 
       <div className="detail-grid">

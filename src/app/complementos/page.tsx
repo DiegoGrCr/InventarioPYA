@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isAdminSession } from '@/lib/auth'
 import Link from 'next/link'
 import { formatPrice, getStockStatus, getStockLabel, getCategoryLabel } from '@/lib/utils'
 import AccessoryTabs from '@/components/accessories/AccessoryTabs'
@@ -7,6 +8,7 @@ import { Droplets, PaintBucket, Plus } from 'lucide-react'
 export default async function AccesoriosPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const params = await searchParams
   const tab = params.tab || 'adhesivo'
+  const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
 
   const { data: accessories } = await supabase
@@ -23,7 +25,7 @@ export default async function AccesoriosPage({ searchParams }: { searchParams: P
           <h1>Complementos</h1>
           <p>Adhesivos y boquillas</p>
         </div>
-        <Link href="/complementos/nuevo" className="btn btn-primary"><Plus size={16} /> Nuevo Accesorio</Link>
+        {isAdmin && <Link href="/complementos/nuevo" className="btn btn-primary"><Plus size={16} /> Nuevo Accesorio</Link>}
       </div>
 
       <AccessoryTabs currentTab={tab} />
@@ -65,7 +67,7 @@ export default async function AccesoriosPage({ searchParams }: { searchParams: P
           <div className="empty-state-icon">{tab === 'adhesivo' ? <Droplets size={48} strokeWidth={1} /> : <PaintBucket size={48} strokeWidth={1} />}</div>
           <h3>Sin {tab === 'adhesivo' ? 'adhesivos' : 'boquillas'} aún</h3>
           <p>Agrega tu primer {tab === 'adhesivo' ? 'adhesivo' : 'boquilla'}</p>
-          <Link href="/complementos/nuevo" className="btn btn-primary"><Plus size={16} /> Agregar</Link>
+          {isAdmin && <Link href="/complementos/nuevo" className="btn btn-primary"><Plus size={16} /> Agregar</Link>}
         </div>
       )}
     </div>

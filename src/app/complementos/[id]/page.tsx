@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isAdminSession } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { formatPrice, getStockStatus, getStockLabel, getCategoryLabel } from '@/lib/utils'
@@ -8,6 +9,7 @@ import DeleteAccessoryBtn from '@/components/accessories/DeleteAccessoryBtn'
 
 export default async function AccesorioDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
 
   const { data: acc } = await supabase
@@ -32,12 +34,14 @@ export default async function AccesorioDetailPage({ params }: { params: Promise<
             <p>{getCategoryLabel(acc.category)}</p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <Link href={`/complementos/${id}/editar`} className="btn btn-secondary">
-            <Pencil size={15} /> Editar
-          </Link>
-          <DeleteAccessoryBtn accessoryId={id} />
-        </div>
+        {isAdmin && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Link href={`/complementos/${id}/editar`} className="btn btn-secondary">
+              <Pencil size={15} /> Editar
+            </Link>
+            <DeleteAccessoryBtn accessoryId={id} />
+          </div>
+        )}
       </div>
 
       <div className="detail-grid">

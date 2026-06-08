@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { updateBanoStock } from '@/actions/banos'
+import { useIsAdmin } from '@/contexts/AdminContext'
 
 interface BanoStockControlProps {
   banoId: string
@@ -11,6 +12,7 @@ interface BanoStockControlProps {
 export default function BanoStockControl({ banoId, initialStock }: BanoStockControlProps) {
   const [stock, setStock] = useState(initialStock)
   const [saving, setSaving] = useState(false)
+  const isAdmin = useIsAdmin()
 
   const updateStock = async (newStock: number) => {
     if (newStock < 0) return
@@ -18,6 +20,10 @@ export default function BanoStockControl({ banoId, initialStock }: BanoStockCont
     setSaving(true)
     await updateBanoStock(banoId, newStock)
     setSaving(false)
+  }
+
+  if (!isAdmin) {
+    return <span className="stock-value">{stock}</span>
   }
 
   return (

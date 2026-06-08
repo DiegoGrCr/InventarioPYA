@@ -1,7 +1,11 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isAdminSession } from '@/lib/auth'
+import { redirect } from 'next/navigation'
 import InventoryTable from '@/components/inventory/InventoryTable'
 
 export default async function InventarioPage() {
+  if (!(await isAdminSession())) redirect('/pisos')
+
   const supabase = await createServerSupabaseClient()
 
   const [{ data: products }, { data: banos }, { data: accessories }, { data: brands }, { data: sizes }] = await Promise.all([

@@ -1,9 +1,11 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { isAdminSession } from '@/lib/auth'
 import Link from 'next/link'
 import { formatPrice, getStockStatus, getStockLabel } from '@/lib/utils'
 import { Toilet, Plus } from 'lucide-react'
 
 export default async function BanosPage() {
+  const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
 
   const { data: banos } = await supabase
@@ -19,7 +21,7 @@ export default async function BanosPage() {
           <h1>Baños</h1>
           <p>Tazas y accesorios de baño</p>
         </div>
-        <Link href="/banos/nuevo" className="btn btn-primary"><Plus size={16} /> Nuevo Producto</Link>
+        {isAdmin && <Link href="/banos/nuevo" className="btn btn-primary"><Plus size={16} /> Nuevo Producto</Link>}
       </div>
 
       {banos && banos.length > 0 ? (
@@ -59,7 +61,7 @@ export default async function BanosPage() {
           <div className="empty-state-icon"><Toilet size={48} strokeWidth={1} /></div>
           <h3>Sin productos de baño aún</h3>
           <p>Agrega tu primera taza de baño</p>
-          <Link href="/banos/nuevo" className="btn btn-primary"><Plus size={16} /> Agregar</Link>
+          {isAdmin && <Link href="/banos/nuevo" className="btn btn-primary"><Plus size={16} /> Agregar</Link>}
         </div>
       )}
     </div>

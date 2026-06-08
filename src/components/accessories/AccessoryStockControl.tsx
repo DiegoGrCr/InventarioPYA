@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { updateAccessoryStock } from '@/actions/accessories'
+import { useIsAdmin } from '@/contexts/AdminContext'
 
 interface AccessoryStockControlProps {
   accessoryId: string
@@ -11,6 +12,7 @@ interface AccessoryStockControlProps {
 export default function AccessoryStockControl({ accessoryId, initialStock }: AccessoryStockControlProps) {
   const [stock, setStock] = useState(initialStock)
   const [saving, setSaving] = useState(false)
+  const isAdmin = useIsAdmin()
 
   const updateStock = async (newStock: number) => {
     if (newStock < 0) return
@@ -18,6 +20,10 @@ export default function AccessoryStockControl({ accessoryId, initialStock }: Acc
     setSaving(true)
     await updateAccessoryStock(accessoryId, newStock)
     setSaving(false)
+  }
+
+  if (!isAdmin) {
+    return <span className="stock-value">{stock}</span>
   }
 
   return (

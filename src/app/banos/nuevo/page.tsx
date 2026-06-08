@@ -1,10 +1,20 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useIsAdmin } from '@/contexts/AdminContext'
 import BanoForm from '@/components/banos/BanoForm'
 
 export default function NuevoBanoPage() {
   const router = useRouter()
+  const isAdmin = useIsAdmin()
+
+  useEffect(() => {
+    if (!isAdmin) router.replace('/banos')
+  }, [isAdmin, router])
+
+  if (!isAdmin) return null
+
   return (
     <div className="fade-in">
       <div className="page-header">

@@ -3,6 +3,8 @@ import './globals.css'
 import AppShell from '@/components/layout/AppShell'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import InstallPrompt from '@/components/InstallPrompt'
+import { AdminProvider } from '@/contexts/AdminContext'
+import { isAdminSession } from '@/lib/auth'
 
 export const metadata: Metadata = {
   title: 'Pisos y Azulejos de Jalpan',
@@ -14,7 +16,9 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const isAdmin = await isAdminSession()
+
   return (
     <html lang="es">
       <head>
@@ -23,7 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body>
-        <AppShell>{children}</AppShell>
+        <AdminProvider isAdmin={isAdmin}>
+          <AppShell>{children}</AppShell>
+        </AdminProvider>
         <ServiceWorkerRegistration />
         <InstallPrompt />
       </body>
