@@ -73,6 +73,14 @@ export default async function BanoDetailPage({ params }: { params: Promise<{ id:
                     <span style={{ fontSize: '14px' }}>{bano.color}</span>
                   </div>
                 )}
+                {bano.bodegas && bano.bodegas.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Bodega</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'flex-end' }}>
+                      {bano.bodegas.map((b: string) => <span key={b} className="badge badge-accent">{b}</span>)}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

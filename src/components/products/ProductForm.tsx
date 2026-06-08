@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createProduct, updateProduct } from '@/actions/products'
 import { createClient } from '@/lib/supabase/client'
-import { Brand, Size, Product } from '@/lib/types'
+import { Brand, Size, Product, WAREHOUSES } from '@/lib/types'
 import { Camera, Loader2, Save, CheckCircle } from 'lucide-react'
 
 interface ProductFormProps {
@@ -224,6 +224,18 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
         <div className="form-group">
           <label className="form-label">Color</label>
           <input type="text" name="color" className="form-input" defaultValue={product?.color || ''} placeholder="Gris, Beige..." />
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Bodega(s)</label>
+        <div className="checkbox-group">
+          {WAREHOUSES.map(w => (
+            <label key={w} className="checkbox-pill">
+              <input type="checkbox" name="bodegas" value={w} defaultChecked={product?.bodegas?.includes(w) || false} />
+              {w}
+            </label>
+          ))}
         </div>
       </div>
 

@@ -46,6 +46,7 @@ export async function createProduct(formData: FormData) {
   const sqmPerBox = parseFloat(formData.get('sqm_per_box') as string) || null
   const pricePerSqm = parseFloat(formData.get('price_per_sqm') as string) || null
   const pricePerBox = pricePerSqm && sqmPerBox ? parseFloat((pricePerSqm * sqmPerBox).toFixed(2)) : null
+  const bodegas = formData.getAll('bodegas') as string[]
 
   const { error } = await supabase.from('products').insert({
     name: formData.get('name') as string,
@@ -56,6 +57,7 @@ export async function createProduct(formData: FormData) {
     sku: (formData.get('sku') as string) || null,
     finish: (formData.get('finish') as string) || null,
     color: (formData.get('color') as string) || null,
+    bodegas,
     stock: parseInt(formData.get('stock') as string) || 0,
     pieces_per_box: parseInt(formData.get('pieces_per_box') as string) || null,
     sqm_per_box: sqmPerBox,
@@ -79,6 +81,7 @@ export async function updateProduct(id: string, formData: FormData) {
   const sqmPerBox = parseFloat(formData.get('sqm_per_box') as string) || null
   const pricePerSqm = parseFloat(formData.get('price_per_sqm') as string) || null
   const pricePerBox = pricePerSqm && sqmPerBox ? parseFloat((pricePerSqm * sqmPerBox).toFixed(2)) : null
+  const bodegas = formData.getAll('bodegas') as string[]
 
   const { error } = await supabase.from('products').update({
     name: formData.get('name') as string,
@@ -89,6 +92,7 @@ export async function updateProduct(id: string, formData: FormData) {
     sku: (formData.get('sku') as string) || null,
     finish: (formData.get('finish') as string) || null,
     color: (formData.get('color') as string) || null,
+    bodegas,
     stock: parseInt(formData.get('stock') as string) || 0,
     pieces_per_box: parseInt(formData.get('pieces_per_box') as string) || null,
     sqm_per_box: sqmPerBox,

@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBanoProduct, updateBanoProduct } from '@/actions/banos'
 import { createClient } from '@/lib/supabase/client'
-import { BanoProduct } from '@/lib/types'
+import { BanoProduct, WAREHOUSES } from '@/lib/types'
 import { Camera, Loader2, Save, CheckCircle } from 'lucide-react'
 
 interface BanoFormProps {
@@ -189,6 +189,18 @@ export default function BanoForm({ bano }: BanoFormProps) {
           defaultValue={bano?.price ?? ''}
           placeholder="0.00"
         />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Bodega(s)</label>
+        <div className="checkbox-group">
+          {WAREHOUSES.map(w => (
+            <label key={w} className="checkbox-pill">
+              <input type="checkbox" name="bodegas" value={w} defaultChecked={bano?.bodegas?.includes(w) || false} />
+              {w}
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="form-group">

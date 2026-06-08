@@ -78,6 +78,14 @@ export default async function AccesorioDetailPage({ params }: { params: Promise<
                     <span style={{ fontSize: '14px' }}>{acc.color}</span>
                   </div>
                 )}
+                {acc.bodegas && acc.bodegas.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Bodega</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'flex-end' }}>
+                      {acc.bodegas.map((b: string) => <span key={b} className="badge badge-accent">{b}</span>)}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

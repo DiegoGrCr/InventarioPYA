@@ -84,6 +84,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     <span style={{ fontSize: '14px' }}>{product.color}</span>
                   </div>
                 )}
+                {product.bodegas && product.bodegas.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Bodega</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'flex-end' }}>
+                      {product.bodegas.map((b: string) => <span key={b} className="badge badge-accent">{b}</span>)}
+                    </div>
+                  </div>
+                )}
                 {product.pieces_per_box && (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Piezas/caja</span>

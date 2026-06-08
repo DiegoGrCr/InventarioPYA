@@ -1,3 +1,5 @@
+export const WAREHOUSES = ['La Playita', 'Arroyo de Cañas', 'Lagunita', 'Plomería', 'Matriz'] as const
+
 export interface Brand {
   id: string
   name: string
@@ -24,6 +26,7 @@ export interface Product {
   image_url: string | null
   finish: string | null
   color: string | null
+  bodegas: string[] | null
   stock: number
   pieces_per_box: number | null
   sqm_per_box: number | null
@@ -45,6 +48,7 @@ export interface Accessory {
   brand: string | null
   weight: string | null
   color: string | null
+  bodegas: string[] | null
   image_url: string | null
   stock: number
   price: number | null
@@ -59,6 +63,7 @@ export interface BanoProduct {
   brand: string | null
   model: string | null
   color: string | null
+  bodegas: string[] | null
   description: string | null
   image_url: string | null
   stock: number

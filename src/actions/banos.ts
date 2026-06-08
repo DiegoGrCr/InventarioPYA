@@ -6,12 +6,14 @@ import { revalidatePath } from 'next/cache'
 export async function createBanoProduct(formData: FormData) {
   const supabase = await createServerSupabaseClient()
   const imageUrl = (formData.get('image_url') as string) || null
+  const bodegas = formData.getAll('bodegas') as string[]
 
   const { error } = await supabase.from('bano_products').insert({
     name: formData.get('name') as string,
     brand: (formData.get('brand') as string) || null,
     model: (formData.get('model') as string) || null,
     color: (formData.get('color') as string) || null,
+    bodegas,
     description: (formData.get('description') as string) || null,
     stock: parseInt(formData.get('stock') as string) || 0,
     price: parseFloat(formData.get('price') as string) || null,
@@ -27,12 +29,14 @@ export async function createBanoProduct(formData: FormData) {
 export async function updateBanoProduct(id: string, formData: FormData) {
   const supabase = await createServerSupabaseClient()
   const imageUrl = (formData.get('image_url') as string) || null
+  const bodegas = formData.getAll('bodegas') as string[]
 
   const { error } = await supabase.from('bano_products').update({
     name: formData.get('name') as string,
     brand: (formData.get('brand') as string) || null,
     model: (formData.get('model') as string) || null,
     color: (formData.get('color') as string) || null,
+    bodegas,
     description: (formData.get('description') as string) || null,
     stock: parseInt(formData.get('stock') as string) || 0,
     price: parseFloat(formData.get('price') as string) || null,

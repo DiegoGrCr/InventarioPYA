@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createAccessory, updateAccessory } from '@/actions/accessories'
 import { createClient } from '@/lib/supabase/client'
-import { Accessory } from '@/lib/types'
+import { Accessory, WAREHOUSES } from '@/lib/types'
 import { Camera, Loader2, Save, CheckCircle } from 'lucide-react'
 
 interface AccessoryFormProps {
@@ -208,6 +208,18 @@ export default function AccessoryForm({ accessory }: AccessoryFormProps) {
           defaultValue={accessory?.price ?? ''}
           placeholder="0.00"
         />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Bodega(s)</label>
+        <div className="checkbox-group">
+          {WAREHOUSES.map(w => (
+            <label key={w} className="checkbox-pill">
+              <input type="checkbox" name="bodegas" value={w} defaultChecked={accessory?.bodegas?.includes(w) || false} />
+              {w}
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="form-group">

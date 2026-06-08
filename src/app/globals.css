@@ -520,6 +520,26 @@ input, select, textarea { font-family: inherit; }
 
 .form-select option { background: var(--bg-surface); color: var(--text); }
 .form-textarea { min-height: 100px; resize: vertical; }
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; }
+.checkbox-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.checkbox-pill:has(input:checked) {
+  border-color: var(--primary);
+  color: var(--text);
+  background: var(--primary-light);
+}
+.checkbox-pill input { accent-color: var(--primary); cursor: pointer; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
 .form-error { font-size: 12px; color: var(--danger); }

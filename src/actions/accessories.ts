@@ -23,6 +23,7 @@ export async function createAccessory(formData: FormData) {
 
   // Image is uploaded client-side; we just receive the resulting public URL
   const imageUrl = (formData.get('image_url') as string) || null
+  const bodegas = formData.getAll('bodegas') as string[]
 
   const { error } = await supabase.from('accessories').insert({
     name: formData.get('name') as string,
@@ -31,6 +32,7 @@ export async function createAccessory(formData: FormData) {
     brand: (formData.get('brand') as string) || null,
     weight: (formData.get('weight') as string) || null,
     color: (formData.get('color') as string) || null,
+    bodegas,
     stock: parseInt(formData.get('stock') as string) || 0,
     price: parseFloat(formData.get('price') as string) || null,
     image_url: imageUrl,
@@ -46,6 +48,7 @@ export async function updateAccessory(id: string, formData: FormData) {
   const supabase = await createServerSupabaseClient()
 
   const imageUrl = (formData.get('image_url') as string) || null
+  const bodegas = formData.getAll('bodegas') as string[]
 
   const { error } = await supabase.from('accessories').update({
     name: formData.get('name') as string,
@@ -54,6 +57,7 @@ export async function updateAccessory(id: string, formData: FormData) {
     brand: (formData.get('brand') as string) || null,
     weight: (formData.get('weight') as string) || null,
     color: (formData.get('color') as string) || null,
+    bodegas,
     stock: parseInt(formData.get('stock') as string) || 0,
     price: parseFloat(formData.get('price') as string) || null,
     image_url: imageUrl || undefined,
