@@ -28,11 +28,21 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
   const supabase = await createServerSupabaseClient()
   const like = `%${query}%`
 
+  // Las medidas (ej. "20x20") viven en una tabla aparte (sizes), así que
+  // buscamos primero los tamaños cuya etiqueta coincide para poder filtrar
+  // los pisos por size_id dentro del mismo .or()
+  const { data: matchingSizes } = await supabase
+    .from('sizes')
+    .select('id')
+    .ilike('label', like)
+  const sizeIds = (matchingSizes || []).map((s) => s.id)
+  const sizeFilter = sizeIds.length > 0 ? `,size_id.in.(${sizeIds.join(',')})` : ''
+
   const [pisosRes, banosRes, compRes] = await Promise.all([
     supabase.from('products')
       .select('id, name, image_url, price_per_sqm, stock, brand:brands(name), size:sizes(label)')
       .eq('is_active', true)
-      .or(`name.ilike.${like},description.ilike.${like},color.ilike.${like},finish.ilike.${like}`)
+      .or(`name.ilike.${like},description.ilike.${like},color.ilike.${like},finish.ilike.${like}${sizeFilter}`)
       .limit(12),
     supabase.from('bano_products')
       .select('id, name, image_url, price, stock, brand, model')
