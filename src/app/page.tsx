@@ -60,7 +60,7 @@ export default async function HomePage() {
           </Link>
           <Link href="/complementos" className="home-quicklink">
             <span className="home-quicklink-icon success"><Package size={20} /></span>
-            Complementos <ArrowRight size={14} />
+            Adhesivos <ArrowRight size={14} />
           </Link>
         </div>
       </section>

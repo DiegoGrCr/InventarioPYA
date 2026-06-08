@@ -52,7 +52,7 @@ export default function Header({ onMenuToggle }: { onMenuToggle: () => void }) {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Buscar pisos, baños, complementos..."
+            placeholder="Buscar pisos, baños, adhesivos..."
             value={value}
             onChange={e => handleChange(e.target.value)}
           />

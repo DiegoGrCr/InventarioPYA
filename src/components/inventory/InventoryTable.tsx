@@ -135,7 +135,7 @@ export default function InventoryTable({ products, banos, accessories, brands, s
       XLSX.utils.book_append_sheet(wb, wsBanos, 'Baños')
 
       const wsAccesorios = XLSX.utils.json_to_sheet(accesoriosRows.length > 0 ? accesoriosRows : [{ 'Producto': 'Sin resultados' }])
-      XLSX.utils.book_append_sheet(wb, wsAccesorios, 'Complementos')
+      XLSX.utils.book_append_sheet(wb, wsAccesorios, 'Adhesivos')
 
       let filename = 'inventario_general.xlsx'
       if (exportScope === 'brand' && selectedBrandId) {
@@ -213,7 +213,7 @@ export default function InventoryTable({ products, banos, accessories, brands, s
       <div className="tabs">
         <button className={`tab ${tab === 'pisos' ? 'active' : ''}`} onClick={() => setTab('pisos')}><Layers size={15} /> Pisos ({products.length})</button>
         <button className={`tab ${tab === 'banos' ? 'active' : ''}`} onClick={() => setTab('banos')}><Toilet size={15} /> Baños ({banos.length})</button>
-        <button className={`tab ${tab === 'accesorios' ? 'active' : ''}`} onClick={() => setTab('accesorios')}><Package size={15} /> Complementos ({accessories.length})</button>
+        <button className={`tab ${tab === 'accesorios' ? 'active' : ''}`} onClick={() => setTab('accesorios')}><Package size={15} /> Adhesivos ({accessories.length})</button>
       </div>
 
       <div className="table-container">

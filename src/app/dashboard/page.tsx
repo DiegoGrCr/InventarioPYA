@@ -59,7 +59,7 @@ export default async function DashboardPage() {
           <div className="stat-icon accent"><Package size={22} /></div>
           <div className="stat-info">
             <h3>{totalAccessories}</h3>
-            <p>Complementos</p>
+            <p>Adhesivos</p>
           </div>
         </Link>
         <Link href="/inventario" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
@@ -115,7 +115,7 @@ export default async function DashboardPage() {
       )}
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '32px', flexWrap: 'wrap' }}>
-        <Link href="/complementos/nuevo" className="btn btn-secondary"><Package size={16} /> Nuevo Complemento</Link>
+        <Link href="/complementos/nuevo" className="btn btn-secondary"><Package size={16} /> Nuevo Adhesivo</Link>
         <Link href="/marcas" className="btn btn-secondary"><Tag size={16} /> Gestionar Marcas</Link>
         <Link href="/medidas" className="btn btn-secondary"><Ruler size={16} /> Gestionar Medidas</Link>
         <Link href="/calculadora" className="btn btn-secondary"><Calculator size={16} /> Calculadora</Link>

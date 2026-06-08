@@ -22,7 +22,7 @@ export default async function AccesoriosPage({ searchParams }: { searchParams: P
     <div className="fade-in">
       <div className="page-header">
         <div>
-          <h1>Complementos</h1>
+          <h1>Adhesivos</h1>
           <p>Adhesivos y boquillas</p>
         </div>
         {isAdmin && <Link href="/complementos/nuevo" className="btn btn-primary"><Plus size={16} /> Nuevo Accesorio</Link>}

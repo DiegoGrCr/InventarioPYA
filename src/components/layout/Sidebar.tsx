@@ -15,7 +15,7 @@ const navItems = [
   { section: 'Catálogo' },
   { label: 'Pisos',       href: '/pisos',        icon: Layers },
   { label: 'Baños',       href: '/banos',        icon: Toilet },
-  { label: 'Complementos', href: '/complementos', icon: Package },
+  { label: 'Adhesivos',    href: '/complementos', icon: Package },
   { section: 'Gestión', adminOnly: true },
   { label: 'Inventario',  href: '/inventario',  icon: ClipboardList, adminOnly: true },
   { label: 'Marcas',      href: '/marcas',      icon: Tag, adminOnly: true },

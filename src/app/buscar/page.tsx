@@ -19,7 +19,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
         <div className="empty-state">
           <div className="empty-state-icon"><Search size={48} strokeWidth={1} /></div>
           <h3>¿Qué estás buscando?</h3>
-          <p>Usa el buscador de arriba para encontrar pisos, baños o complementos</p>
+          <p>Usa el buscador de arriba para encontrar pisos, baños o adhesivos</p>
         </div>
       </div>
     )
@@ -134,7 +134,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
         <section>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
             <Package size={18} />
-            <h2 style={{ fontSize: '16px', fontWeight: 700 }}>Complementos ({complementos.length})</h2>
+            <h2 style={{ fontSize: '16px', fontWeight: 700 }}>Adhesivos ({complementos.length})</h2>
           </div>
           <div className="product-grid">
             {complementos.map((c) => (

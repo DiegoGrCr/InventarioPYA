@@ -8,7 +8,7 @@ const mobileItems = [
   { label: 'Inicio',       href: '/',             icon: LayoutDashboard },
   { label: 'Pisos',        href: '/pisos',         icon: Layers },
   { label: 'Baños',        href: '/banos',         icon: Toilet },
-  { label: 'Complementos', href: '/complementos',  icon: Package },
+  { label: 'Adhesivos',    href: '/complementos',  icon: Package },
   { label: 'Calculadora',  href: '/calculadora',   icon: Calculator },
   { label: 'Admin',        href: '/admin',         icon: ShieldCheck },
 ]
