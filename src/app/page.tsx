@@ -1,125 +1,119 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { isAdminSession } from '@/lib/auth'
-import { redirect } from 'next/navigation'
+import Image from 'next/image'
 import Link from 'next/link'
-import { Layers, Package, AlertTriangle, Tag, PackageOpen, Plus, Ruler, Calculator, Toilet } from 'lucide-react'
+import { Search, Layers, Toilet, Package, ArrowRight } from 'lucide-react'
 
-export default async function DashboardPage() {
-  if (!(await isAdminSession())) redirect('/pisos')
+export const revalidate = 60
 
+export default async function HomePage() {
   const supabase = await createServerSupabaseClient()
 
-  const [productsRes, accessoriesRes, banosRes, lowStockRes, brandsRes] = await Promise.all([
-    supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('accessories').select('id', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('bano_products').select('id', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true).lte('stock', 5),
-    supabase.from('brands').select('id', { count: 'exact', head: true }),
+  const [pisosRes, banosRes] = await Promise.all([
+    supabase
+      .from('products')
+      .select('id, name, image_url, size:sizes(label)')
+      .eq('is_active', true)
+      .not('image_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(14),
+    supabase
+      .from('bano_products')
+      .select('id, name, image_url, brand')
+      .eq('is_active', true)
+      .not('image_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(14),
   ])
 
-  const totalProducts = productsRes.count || 0
-  const totalAccessories = accessoriesRes.count || 0
-  const totalBanos = banosRes.count || 0
-  const lowStock = lowStockRes.count || 0
-  const totalBrands = brandsRes.count || 0
+  const pisos = pisosRes.data || []
+  const banos = banosRes.data || []
 
-  const { data: recentProducts } = await supabase
-    .from('products')
-    .select('*, brand:brands(name), size:sizes(label)')
-    .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(6)
+  // Duplicamos la lista para lograr un loop infinito sin saltos
+  const pisosLoop = pisos.length > 0 ? [...pisos, ...pisos] : []
+  const banosLoop = banos.length > 0 ? [...banos, ...banos] : []
 
   return (
-    <div className="fade-in">
-      <div className="page-header">
-        <div>
-          <h1>Dashboard</h1>
-          <p>Resumen general del inventario</p>
-        </div>
-        <Link href="/pisos/nuevo" className="btn btn-primary"><Plus size={16} /> Nuevo Piso</Link>
-      </div>
+    <div className="fade-in home-page">
+      <section className="home-hero">
+        <Image
+          src="/logo1.png"
+          alt="Pisos y Azulejos de Jalpan"
+          width={96}
+          height={96}
+          className="home-hero-logo"
+          priority
+        />
+        <h1 className="home-hero-title">Pisos y Azulejos de Jalpan</h1>
+        <p className="home-hero-subtitle">Encuentra pisos, baños y complementos para tu proyecto</p>
 
-      <div className="stats-grid">
-        <Link href="/pisos" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
-          <div className="stat-icon primary"><Layers size={22} /></div>
-          <div className="stat-info">
-            <h3>{totalProducts}</h3>
-            <p>Pisos en catálogo</p>
-          </div>
-        </Link>
-        <Link href="/banos" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
-          <div className="stat-icon accent"><Toilet size={22} /></div>
-          <div className="stat-info">
-            <h3>{totalBanos}</h3>
-            <p>Baños</p>
-          </div>
-        </Link>
-        <Link href="/complementos" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
-          <div className="stat-icon accent"><Package size={22} /></div>
-          <div className="stat-info">
-            <h3>{totalAccessories}</h3>
-            <p>Complementos</p>
-          </div>
-        </Link>
-        <Link href="/inventario" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
-          <div className="stat-icon warning"><AlertTriangle size={22} /></div>
-          <div className="stat-info">
-            <h3>{lowStock}</h3>
-            <p>Stock bajo</p>
-          </div>
-        </Link>
-        <Link href="/marcas" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
-          <div className="stat-icon success"><Tag size={22} /></div>
-          <div className="stat-info">
-            <h3>{totalBrands}</h3>
-            <p>Marcas</p>
-          </div>
-        </Link>
-      </div>
+        <form action="/buscar" method="GET" className="home-search">
+          <Search size={18} className="home-search-icon" />
+          <input
+            type="text"
+            name="q"
+            placeholder="Busca por nombre, marca, color, medida..."
+            autoComplete="off"
+          />
+          <button type="submit" className="btn btn-primary home-search-btn">Buscar</button>
+        </form>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <h2 style={{ fontSize: '18px', fontWeight: 700 }}>Productos Recientes</h2>
-        <Link href="/pisos" className="btn btn-ghost btn-sm">Ver todos →</Link>
-      </div>
+        <div className="home-quicklinks">
+          <Link href="/pisos" className="home-quicklink">
+            <span className="home-quicklink-icon primary"><Layers size={20} /></span>
+            Pisos <ArrowRight size={14} />
+          </Link>
+          <Link href="/banos" className="home-quicklink">
+            <span className="home-quicklink-icon accent"><Toilet size={20} /></span>
+            Baños <ArrowRight size={14} />
+          </Link>
+          <Link href="/complementos" className="home-quicklink">
+            <span className="home-quicklink-icon success"><Package size={20} /></span>
+            Complementos <ArrowRight size={14} />
+          </Link>
+        </div>
+      </section>
 
-      {recentProducts && recentProducts.length > 0 ? (
-        <div className="product-grid">
-          {recentProducts.map((p) => (
-            <Link key={p.id} href={`/pisos/${p.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
-              <div className="card-image-wrapper">
-                {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} className="card-image" />
-                ) : (
-                  <div className="card-image-placeholder"><Layers size={48} strokeWidth={1} /></div>
-                )}
-                {p.size && <span className="card-image-size-badge">{(p.size as { label: string }).label}</span>}
-              </div>
-              <div className="card-body">
-                <h3 className="card-title">{p.name}</h3>
-                <div className="card-meta">
-                  <span className="badge badge-primary">{p.material === 'ceramica' ? 'Cerámica' : 'Porcelana'}</span>
-                </div>
-                {p.brand && <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{(p.brand as { name: string }).name}</p>}
-              </div>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <div className="empty-state">
-          <div className="empty-state-icon"><PackageOpen size={48} strokeWidth={1} /></div>
-          <h3>Sin productos aún</h3>
-          <p>Agrega tu primer piso al catálogo para comenzar</p>
-          <Link href="/pisos/nuevo" className="btn btn-primary"><Plus size={16} /> Agregar Piso</Link>
-        </div>
+      {pisosLoop.length > 0 && (
+        <section className="marquee-row">
+          <div className="marquee-row-label">
+            <Layers size={14} /> Pisos
+          </div>
+          <div className="marquee-viewport">
+            <div className="marquee-track" style={{ ['--duration' as string]: '52s' }}>
+              {pisosLoop.map((p, i) => (
+                <Link key={`${p.id}-${i}`} href={`/pisos/${p.id}`} className="marquee-card">
+                  <img src={p.image_url!} alt={p.name} />
+                  <div className="marquee-card-info">
+                    <span className="marquee-card-name">{p.name}</span>
+                    {p.size && <span className="badge badge-accent">{(p.size as unknown as { label: string }).label}</span>}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
       )}
 
-      <div style={{ display: 'flex', gap: '12px', marginTop: '32px', flexWrap: 'wrap' }}>
-        <Link href="/complementos/nuevo" className="btn btn-secondary"><Package size={16} /> Nuevo Complemento</Link>
-        <Link href="/marcas" className="btn btn-secondary"><Tag size={16} /> Gestionar Marcas</Link>
-        <Link href="/medidas" className="btn btn-secondary"><Ruler size={16} /> Gestionar Medidas</Link>
-        <Link href="/calculadora" className="btn btn-secondary"><Calculator size={16} /> Calculadora</Link>
-      </div>
+      {banosLoop.length > 0 && (
+        <section className="marquee-row">
+          <div className="marquee-row-label">
+            <Toilet size={14} /> Baños
+          </div>
+          <div className="marquee-viewport">
+            <div className="marquee-track reverse" style={{ ['--duration' as string]: '60s' }}>
+              {banosLoop.map((b, i) => (
+                <Link key={`${b.id}-${i}`} href={`/banos/${b.id}`} className="marquee-card">
+                  <img src={b.image_url!} alt={b.name} />
+                  <div className="marquee-card-info">
+                    <span className="marquee-card-name">{b.name}</span>
+                    {b.brand && <span className="badge badge-primary">{b.brand}</span>}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

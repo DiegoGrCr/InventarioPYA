@@ -5,12 +5,13 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useIsAdmin } from '@/contexts/AdminContext'
 import {
-  LayoutDashboard, Layers, Package, ClipboardList,
+  LayoutDashboard, Home, Layers, Package, ClipboardList,
   Tag, Ruler, Calculator, Toilet, ShieldCheck,
 } from 'lucide-react'
 
 const navItems = [
-  { label: 'Dashboard',   href: '/',            icon: LayoutDashboard, adminOnly: true },
+  { label: 'Inicio',      href: '/',            icon: Home },
+  { label: 'Dashboard',   href: '/dashboard',   icon: LayoutDashboard, adminOnly: true },
   { section: 'Catálogo' },
   { label: 'Pisos',       href: '/pisos',        icon: Layers },
   { label: 'Baños',       href: '/banos',        icon: Toilet },
