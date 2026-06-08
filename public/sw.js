@@ -1,4 +1,4 @@
-const CACHE = 'pya-jalpan-v1';
+const CACHE = 'pya-jalpan-v2';
 
 // Pre-cache shell pages so navegación funciona offline
 const SHELL = ['/', '/pisos', '/banos', '/complementos', '/inventario', '/calculadora'];
@@ -26,6 +26,14 @@ self.addEventListener('fetch', (event) => {
 
   // No cachear llamadas a Supabase (datos en tiempo real)
   if (url.hostname.includes('supabase')) return;
+
+  // No cachear payloads internos de Next.js (RSC / route data): cambian en
+  // cada deploy y servir versiones viejas rompe la hidratación de React
+  if (
+    url.searchParams.has('_rsc') ||
+    event.request.headers.get('RSC') === '1' ||
+    event.request.headers.get('Next-Router-Prefetch')
+  ) return;
 
   // Imágenes del bucket: cache-first (raramente cambian)
   if (event.request.destination === 'image') {
