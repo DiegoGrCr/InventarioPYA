@@ -73,11 +73,13 @@ export default async function HomePage() {
           <div className="marquee-viewport">
             <div className="marquee-track" style={{ ['--duration' as string]: '52s' }}>
               {pisosLoop.map((p, i) => (
-                <Link key={`${p.id}-${i}`} href={`/pisos/${p.id}`} className="marquee-card">
-                  <img src={p.image_url!} alt={p.name} />
-                  <div className="marquee-card-info">
-                    <span className="marquee-card-name">{p.name}</span>
-                    {p.size && <span className="badge badge-accent">{(p.size as unknown as { label: string }).label}</span>}
+                <Link key={`${p.id}-${i}`} href={`/pisos/${p.id}`} className="card marquee-card">
+                  <div className="card-image-wrapper">
+                    <img src={p.image_url!} alt={p.name} className="card-image" />
+                    {p.size && <span className="card-image-size-badge">{(p.size as unknown as { label: string }).label}</span>}
+                  </div>
+                  <div className="card-body">
+                    <h3 className="card-title">{p.name}</h3>
                   </div>
                 </Link>
               ))}
@@ -94,11 +96,13 @@ export default async function HomePage() {
           <div className="marquee-viewport">
             <div className="marquee-track reverse" style={{ ['--duration' as string]: '60s' }}>
               {banosLoop.map((b, i) => (
-                <Link key={`${b.id}-${i}`} href={`/banos/${b.id}`} className="marquee-card">
-                  <img src={b.image_url!} alt={b.name} />
-                  <div className="marquee-card-info">
-                    <span className="marquee-card-name">{b.name}</span>
-                    {b.brand && <span className="badge badge-primary">{b.brand}</span>}
+                <Link key={`${b.id}-${i}`} href={`/banos/${b.id}`} className="card marquee-card">
+                  <div className="card-image-wrapper">
+                    <img src={b.image_url!} alt={b.name} className="card-image" />
+                    {b.brand && <span className="card-image-size-badge">{b.brand}</span>}
+                  </div>
+                  <div className="card-body">
+                    <h3 className="card-title">{b.name}</h3>
                   </div>
                 </Link>
               ))}
