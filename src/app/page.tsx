@@ -1,5 +1,4 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import Image from 'next/image'
 import Link from 'next/link'
 import { Search, Layers, Toilet, Package, ArrowRight } from 'lucide-react'
 
@@ -35,21 +34,12 @@ export default async function HomePage() {
   return (
     <div className="fade-in home-page">
       <section className="home-hero">
-        <div className="home-hero-logo-frame">
-          <Image
-            src="/logo1.png"
-            alt="Pisos y Azulejos de Jalpan"
-            width={88}
-            height={88}
-            className="home-hero-logo"
-            priority
-          />
-        </div>
+        <img src="/logo1.png" alt="Pisos y Azulejos de Jalpan" className="home-hero-logo" />
         <h1 className="home-hero-title">Pisos y Azulejos de Jalpan</h1>
-        <p className="home-hero-subtitle">Encuentra pisos, baños y complementos para tu proyecto</p>
+        <p className="home-hero-subtitle">¿Qué estás buscando hoy?</p>
 
         <form action="/buscar" method="GET" className="home-search">
-          <Search size={18} className="home-search-icon" />
+          <Search size={20} className="home-search-icon" />
           <input
             type="text"
             name="q"
