@@ -936,11 +936,22 @@ input, select, textarea { font-family: inherit; }
   animation: slideUp 500ms ease;
 }
 
-.home-hero-logo {
-  border-radius: var(--radius);
-  object-fit: contain;
-  box-shadow: 0 0 0 1px var(--border), 0 12px 40px rgba(34, 211, 238, 0.15);
+.home-hero-logo-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--bg-surface-active), var(--bg-surface));
+  border: 1px solid var(--border);
+  box-shadow: 0 0 0 1px var(--border), 0 16px 48px rgba(34, 211, 238, 0.18);
   animation: floatLogo 5s ease-in-out infinite;
+}
+
+.home-hero-logo {
+  border-radius: 50%;
+  object-fit: contain;
 }
 
 .home-hero-title {

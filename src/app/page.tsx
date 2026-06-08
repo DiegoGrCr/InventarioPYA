@@ -35,14 +35,16 @@ export default async function HomePage() {
   return (
     <div className="fade-in home-page">
       <section className="home-hero">
-        <Image
-          src="/logo1.png"
-          alt="Pisos y Azulejos de Jalpan"
-          width={96}
-          height={96}
-          className="home-hero-logo"
-          priority
-        />
+        <div className="home-hero-logo-frame">
+          <Image
+            src="/logo1.png"
+            alt="Pisos y Azulejos de Jalpan"
+            width={88}
+            height={88}
+            className="home-hero-logo"
+            priority
+          />
+        </div>
         <h1 className="home-hero-title">Pisos y Azulejos de Jalpan</h1>
         <p className="home-hero-subtitle">Encuentra pisos, baños y complementos para tu proyecto</p>
 
