@@ -24,6 +24,7 @@ interface InventoryTableProps {
     price_per_sqm: number | null
     price_per_box: number | null
     sqm_per_box: number | null
+    pieces_per_box: number | null
     brand: { name: string } | null
     size: { label: string } | null
   }>
@@ -109,6 +110,10 @@ export default function InventoryTable({ products, banos, accessories, brands, s
           'Total m² en stock': p.sqm_per_box ? parseFloat((currentStock * p.sqm_per_box).toFixed(2)) : '',
           'Precio/m²': p.price_per_sqm ?? '',
           'Precio/unidad': p.price_per_box ?? '',
+          'Piezas/caja proveedor': isPieza ? (p.pieces_per_box ?? '') : '',
+          'Precio/caja proveedor': isPieza && p.price_per_box && p.pieces_per_box
+            ? parseFloat((p.price_per_box * p.pieces_per_box).toFixed(2))
+            : '',
         }
       })
 

@@ -24,11 +24,17 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
   const [uploadError, setUploadError] = useState('')
   const [pricePerSqm, setPricePerSqm] = useState(product?.price_per_sqm?.toString() || '')
   const [sqmPerBox, setSqmPerBox] = useState(product?.sqm_per_box?.toString() || '')
+  const [piecesPerBox, setPiecesPerBox] = useState(product?.pieces_per_box?.toString() || '')
   const [saleUnit, setSaleUnit] = useState(product?.sale_unit || 'caja')
   const isPieza = saleUnit === 'pieza'
 
   const computedPricePerBox = pricePerSqm && sqmPerBox && parseFloat(pricePerSqm) > 0 && parseFloat(sqmPerBox) > 0
     ? (parseFloat(pricePerSqm) * parseFloat(sqmPerBox)).toFixed(2)
+    : null
+
+  // Para pieza: precio de la caja completa del proveedor = precio/pieza × piezas/caja
+  const computedSupplierBoxPrice = isPieza && computedPricePerBox && piecesPerBox && parseFloat(piecesPerBox) > 0
+    ? (parseFloat(computedPricePerBox) * parseFloat(piecesPerBox)).toFixed(2)
     : null
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,17 +189,24 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
         </div>
       </div>
 
-      <div className={isPieza ? 'form-row' : 'form-row-3'}>
+      <div className="form-row-3">
         <div className="form-group">
           <label className="form-label">{isPieza ? 'Stock (piezas)' : 'Stock (cajas)'}</label>
           <input type="number" name="stock" className="form-input" min="0" defaultValue={product?.stock ?? 0} />
         </div>
-        {!isPieza && (
-          <div className="form-group">
-            <label className="form-label">Piezas/caja</label>
-            <input type="number" name="pieces_per_box" className="form-input" min="1" defaultValue={product?.pieces_per_box || ''} />
-          </div>
-        )}
+        <div className="form-group">
+          <label className="form-label">Piezas/caja</label>
+          <input
+            type="number"
+            name="pieces_per_box"
+            className="form-input"
+            min="1"
+            value={piecesPerBox}
+            onChange={e => setPiecesPerBox(e.target.value)}
+            placeholder="8"
+          />
+          {isPieza && <small style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px', display: 'block' }}>Piezas que trae la caja del proveedor</small>}
+        </div>
         <div className="form-group">
           <label className="form-label">{isPieza ? 'm² por pieza' : 'm²/caja'}</label>
           <input
@@ -225,6 +238,11 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
           {computedPricePerBox && (
             <small style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
               = ${computedPricePerBox} {isPieza ? '/pieza' : '/caja'}
+            </small>
+          )}
+          {computedSupplierBoxPrice && (
+            <small style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px', display: 'block' }}>
+              = ${computedSupplierBoxPrice} /caja ({piecesPerBox} piezas)
             </small>
           )}
         </div>

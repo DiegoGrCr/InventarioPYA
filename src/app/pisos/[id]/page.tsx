@@ -96,7 +96,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     </div>
                   </div>
                 )}
-                {product.sale_unit !== 'pieza' && product.pieces_per_box && (
+                {product.pieces_per_box && (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Piezas/caja</span>
                     <span style={{ fontSize: '14px' }}>{product.pieces_per_box}</span>
@@ -122,9 +122,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 {product.price_per_sqm && <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>por m²</span>}
               </div>
               {product.price_per_box && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: product.sale_unit === 'pieza' && product.pieces_per_box ? '4px' : '16px' }}>
                   <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{formatPrice(product.price_per_box)}</span>
                   <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{product.sale_unit === 'pieza' ? 'por pieza' : 'por caja'}</span>
+                </div>
+              )}
+              {product.sale_unit === 'pieza' && product.price_per_box && product.pieces_per_box && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{formatPrice(product.price_per_box * product.pieces_per_box)}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>por caja ({product.pieces_per_box} piezas)</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

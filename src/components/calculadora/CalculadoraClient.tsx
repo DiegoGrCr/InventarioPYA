@@ -129,6 +129,8 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
   const excessPieza    = parseFloat((m2Pieza - m2Total).toFixed(4))
   const pricePerPieza  = price > 0 && sqm > 0 ? price * sqm : 0
   const costPieza      = piecesNeeded > 0 && pricePerPieza > 0 ? piecesNeeded * pricePerPieza : 0
+  // Equivalente en cajas del proveedor (cada caja trae pcsBox piezas)
+  const boxesNeededPieza = piecesNeeded > 0 && pcsBox > 0 ? Math.ceil(piecesNeeded / pcsBox) : 0
 
   const adhesive  = m2Total > 0 ? Math.ceil(m2Total / 2) : 0
   const hasResults = m2Net > 0 && sqm > 0
@@ -215,17 +217,15 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
           <Calculator size={13} /> Paso 2 — Datos y área
         </p>
 
-        <div className={isPieza ? 'form-row' : 'form-row-3'} style={{ marginBottom: '16px' }}>
+        <div className="form-row-3" style={{ marginBottom: '16px' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">{isPieza ? 'm² por pieza' : 'm² por caja'}</label>
             <input type="number" className="form-input" value={sqmPerBox} onChange={e => setSqmPerBox(e.target.value)} placeholder="1.44" min="0" step="0.01" />
           </div>
-          {!isPieza && (
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Piezas por caja</label>
-              <input type="number" className="form-input" value={piecesPerBox} onChange={e => setPiecesPerBox(e.target.value)} placeholder="8" min="0" />
-            </div>
-          )}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">{isPieza ? 'Piezas/caja (proveedor)' : 'Piezas por caja'}</label>
+            <input type="number" className="form-input" value={piecesPerBox} onChange={e => setPiecesPerBox(e.target.value)} placeholder="8" min="0" />
+          </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Precio por m²</label>
             <input type="number" className="form-input" value={pricePerSqm} onChange={e => setPricePerSqm(e.target.value)} placeholder="250.00" min="0" step="0.01" />
@@ -380,6 +380,7 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
                 <div>
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cubren <strong>{m2Pieza.toFixed(2)} m²</strong></div>
                   {sqm > 0 && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sqm.toFixed(4)} m² por pieza</div>}
+                  {boxesNeededPieza > 0 && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>≈ {boxesNeededPieza} {boxesNeededPieza === 1 ? 'caja' : 'cajas'} del proveedor ({pcsBox} piezas c/u)</div>}
                 </div>
                 {costPieza > 0 && (
                   <>
