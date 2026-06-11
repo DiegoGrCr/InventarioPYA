@@ -41,7 +41,7 @@ export default function ProductCard({ product }: { product: Product }) {
           }
         </span>
         <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-          Stock: {product.stock} cajas
+          Stock: {product.stock} {product.sale_unit === 'pieza' ? 'piezas' : 'cajas'}
         </span>
       </div>
     </Link>

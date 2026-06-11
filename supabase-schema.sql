@@ -63,6 +63,10 @@ CREATE TABLE products (
   finish TEXT,
   color TEXT,
   stock INTEGER DEFAULT 0,
+  -- Unidad en la que se vende y se controla el stock. Para 'pieza',
+  -- pieces_per_box no aplica y sqm_per_box/price_per_box representan
+  -- m² y precio de UNA pieza (ej. azulejos grandes vendidos sueltos).
+  sale_unit TEXT NOT NULL DEFAULT 'caja' CHECK (sale_unit IN ('caja', 'pieza')),
   pieces_per_box INTEGER,
   sqm_per_box NUMERIC(5,2),
   price_per_box NUMERIC(10,2),

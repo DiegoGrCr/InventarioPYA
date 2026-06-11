@@ -8,6 +8,7 @@ type ProductSummary = {
   id: string
   name: string
   material: string
+  sale_unit: 'caja' | 'pieza'
   sqm_per_box: number | null
   pieces_per_box: number | null
   price_per_sqm: number | null
@@ -31,6 +32,7 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
   const [sqmPerBox, setSqmPerBox]       = useState('')
   const [piecesPerBox, setPiecesPerBox] = useState('')
   const [pricePerSqm, setPricePerSqm]   = useState('')
+  const [saleUnit, setSaleUnit]         = useState<'caja' | 'pieza'>('caja')
 
   // Area input mode
   const [areaMode, setAreaMode] = useState<'metros' | 'dimensiones'>('metros')
@@ -73,6 +75,7 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
     setSqmPerBox(p.sqm_per_box?.toString() || '')
     setPiecesPerBox(p.pieces_per_box?.toString() || '')
     setPricePerSqm(p.price_per_sqm?.toString() || '')
+    setSaleUnit(p.sale_unit || 'caja')
     setShowDropdown(false)
     setTimeout(() => metrosRef.current?.focus(), 50)
   }
@@ -83,6 +86,7 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
     setSqmPerBox('')
     setPiecesPerBox('')
     setPricePerSqm('')
+    setSaleUnit('caja')
   }
 
   // ── Calculations ──────────────────────────────────────────────────────────
@@ -117,6 +121,14 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
 
   // Show option B only when it differs from A (there are loose pieces)
   const showOptionB  = loosePieces > 0 && sqm > 0 && pcsBox > 0
+
+  // Modo "pieza" — el material se vende por pieza individual, sqm = m² por pieza
+  const isPieza        = saleUnit === 'pieza'
+  const piecesNeeded   = isPieza && sqm > 0 && m2Total > 0 ? Math.ceil(m2Total / sqm) : 0
+  const m2Pieza        = parseFloat((piecesNeeded * sqm).toFixed(4))
+  const excessPieza    = parseFloat((m2Pieza - m2Total).toFixed(4))
+  const pricePerPieza  = price > 0 && sqm > 0 ? price * sqm : 0
+  const costPieza      = piecesNeeded > 0 && pricePerPieza > 0 ? piecesNeeded * pricePerPieza : 0
 
   const adhesive  = m2Total > 0 ? Math.ceil(m2Total / 2) : 0
   const hasResults = m2Net > 0 && sqm > 0
@@ -203,15 +215,17 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
           <Calculator size={13} /> Paso 2 — Datos y área
         </p>
 
-        <div className="form-row-3" style={{ marginBottom: '16px' }}>
+        <div className={isPieza ? 'form-row' : 'form-row-3'} style={{ marginBottom: '16px' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">m² por caja</label>
+            <label className="form-label">{isPieza ? 'm² por pieza' : 'm² por caja'}</label>
             <input type="number" className="form-input" value={sqmPerBox} onChange={e => setSqmPerBox(e.target.value)} placeholder="1.44" min="0" step="0.01" />
           </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Piezas por caja</label>
-            <input type="number" className="form-input" value={piecesPerBox} onChange={e => setPiecesPerBox(e.target.value)} placeholder="8" min="0" />
-          </div>
+          {!isPieza && (
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Piezas por caja</label>
+              <input type="number" className="form-input" value={piecesPerBox} onChange={e => setPiecesPerBox(e.target.value)} placeholder="8" min="0" />
+            </div>
+          )}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Precio por m²</label>
             <input type="number" className="form-input" value={pricePerSqm} onChange={e => setPricePerSqm(e.target.value)} placeholder="250.00" min="0" step="0.01" />
@@ -344,7 +358,44 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
             )}
           </div>
 
+          {/* ── Material vendido por pieza individual ── */}
+          {isPieza && (
+            <div style={{ border: '1px solid rgba(99,102,241,0.3)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: '12px' }}>
+              <div style={{ background: 'var(--primary-light)', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--primary-hover)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Piezas necesarias
+                </span>
+                {excessPieza > 0 && (
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    sobran {excessPieza.toFixed(2)} m²
+                  </span>
+                )}
+              </div>
+              <div style={{ padding: '14px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ textAlign: 'center', minWidth: '70px' }}>
+                  <div style={{ fontSize: '42px', fontWeight: 800, color: 'var(--primary-hover)', lineHeight: 1 }}>{piecesNeeded}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>piezas</div>
+                </div>
+                <div style={{ color: 'var(--border)', fontSize: '20px' }}>·</div>
+                <div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Cubren <strong>{m2Pieza.toFixed(2)} m²</strong></div>
+                  {sqm > 0 && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sqm.toFixed(4)} m² por pieza</div>}
+                </div>
+                {costPieza > 0 && (
+                  <>
+                    <div style={{ flex: 1 }} />
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--success)' }}>{formatPrice(costPieza)}</div>
+                      {pricePerPieza > 0 && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{formatPrice(pricePerPieza)} / pieza</div>}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Opción A: Cajas enteras ── */}
+          {!isPieza && (
           <div style={{ border: '1px solid rgba(99,102,241,0.3)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: '12px' }}>
             <div style={{ background: 'var(--primary-light)', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--primary-hover)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -377,9 +428,10 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
               )}
             </div>
           </div>
+          )}
 
           {/* ── Opción B: Cajas + piezas sueltas ── */}
-          {showOptionB && (
+          {!isPieza && showOptionB && (
             <div style={{ border: '1px solid rgba(34,211,238,0.3)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: '12px' }}>
               <div style={{ background: 'var(--accent-light)', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>

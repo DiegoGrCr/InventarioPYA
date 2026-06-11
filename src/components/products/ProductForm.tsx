@@ -24,6 +24,8 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
   const [uploadError, setUploadError] = useState('')
   const [pricePerSqm, setPricePerSqm] = useState(product?.price_per_sqm?.toString() || '')
   const [sqmPerBox, setSqmPerBox] = useState(product?.sqm_per_box?.toString() || '')
+  const [saleUnit, setSaleUnit] = useState(product?.sale_unit || 'caja')
+  const isPieza = saleUnit === 'pieza'
 
   const computedPricePerBox = pricePerSqm && sqmPerBox && parseFloat(pricePerSqm) > 0 && parseFloat(sqmPerBox) > 0
     ? (parseFloat(pricePerSqm) * parseFloat(sqmPerBox)).toFixed(2)
@@ -160,7 +162,7 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
         </div>
       </div>
 
-      <div className="form-row">
+      <div className="form-row-3">
         <div className="form-group">
           <label className="form-label">Medida</label>
           <select name="size_id" className="form-select" defaultValue={product?.size_id || ''}>
@@ -172,19 +174,28 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
           <label className="form-label">SKU</label>
           <input type="text" name="sku" className="form-input" defaultValue={product?.sku || ''} placeholder="Código único" />
         </div>
+        <div className="form-group">
+          <label className="form-label">Se vende por</label>
+          <select name="sale_unit" className="form-select" value={saleUnit} onChange={e => setSaleUnit(e.target.value as 'caja' | 'pieza')}>
+            <option value="caja">Caja</option>
+            <option value="pieza">Pieza individual</option>
+          </select>
+        </div>
       </div>
 
-      <div className="form-row-3">
+      <div className={isPieza ? 'form-row' : 'form-row-3'}>
         <div className="form-group">
-          <label className="form-label">Stock (cajas)</label>
+          <label className="form-label">{isPieza ? 'Stock (piezas)' : 'Stock (cajas)'}</label>
           <input type="number" name="stock" className="form-input" min="0" defaultValue={product?.stock ?? 0} />
         </div>
+        {!isPieza && (
+          <div className="form-group">
+            <label className="form-label">Piezas/caja</label>
+            <input type="number" name="pieces_per_box" className="form-input" min="1" defaultValue={product?.pieces_per_box || ''} />
+          </div>
+        )}
         <div className="form-group">
-          <label className="form-label">Piezas/caja</label>
-          <input type="number" name="pieces_per_box" className="form-input" min="1" defaultValue={product?.pieces_per_box || ''} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">m²/caja</label>
+          <label className="form-label">{isPieza ? 'm² por pieza' : 'm²/caja'}</label>
           <input
             type="number"
             name="sqm_per_box"
@@ -213,7 +224,7 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
           />
           {computedPricePerBox && (
             <small style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-              = ${computedPricePerBox} /caja
+              = ${computedPricePerBox} {isPieza ? '/pieza' : '/caja'}
             </small>
           )}
         </div>

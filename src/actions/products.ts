@@ -75,6 +75,7 @@ export async function createProduct(formData: FormData) {
   const pricePerSqm = parseFloat(formData.get('price_per_sqm') as string) || null
   const pricePerBox = pricePerSqm && sqmPerBox ? parseFloat((pricePerSqm * sqmPerBox).toFixed(2)) : null
   const bodegas = formData.getAll('bodegas') as string[]
+  const saleUnit = (formData.get('sale_unit') as string) || 'caja'
 
   const { error } = await supabase.from('products').insert({
     name: formData.get('name') as string,
@@ -87,7 +88,8 @@ export async function createProduct(formData: FormData) {
     color: (formData.get('color') as string) || null,
     bodegas,
     stock: parseInt(formData.get('stock') as string) || 0,
-    pieces_per_box: parseInt(formData.get('pieces_per_box') as string) || null,
+    sale_unit: saleUnit,
+    pieces_per_box: saleUnit === 'pieza' ? null : (parseInt(formData.get('pieces_per_box') as string) || null),
     sqm_per_box: sqmPerBox,
     price_per_sqm: pricePerSqm,
     price_per_box: pricePerBox,
@@ -110,6 +112,7 @@ export async function updateProduct(id: string, formData: FormData) {
   const pricePerSqm = parseFloat(formData.get('price_per_sqm') as string) || null
   const pricePerBox = pricePerSqm && sqmPerBox ? parseFloat((pricePerSqm * sqmPerBox).toFixed(2)) : null
   const bodegas = formData.getAll('bodegas') as string[]
+  const saleUnit = (formData.get('sale_unit') as string) || 'caja'
 
   const { error } = await supabase.from('products').update({
     name: formData.get('name') as string,
@@ -122,7 +125,8 @@ export async function updateProduct(id: string, formData: FormData) {
     color: (formData.get('color') as string) || null,
     bodegas,
     stock: parseInt(formData.get('stock') as string) || 0,
-    pieces_per_box: parseInt(formData.get('pieces_per_box') as string) || null,
+    sale_unit: saleUnit,
+    pieces_per_box: saleUnit === 'pieza' ? null : (parseInt(formData.get('pieces_per_box') as string) || null),
     sqm_per_box: sqmPerBox,
     price_per_sqm: pricePerSqm,
     price_per_box: pricePerBox,

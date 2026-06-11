@@ -20,6 +20,7 @@ interface InventoryTableProps {
     brand_id: string | null
     size_id: string | null
     bodegas: string[] | null
+    sale_unit: 'caja' | 'pieza'
     price_per_sqm: number | null
     price_per_box: number | null
     sqm_per_box: number | null
@@ -94,6 +95,7 @@ export default function InventoryTable({ products, banos, accessories, brands, s
 
       const pisosRows = sortedPisos.map(p => {
         const currentStock = stocks[p.id]
+        const isPieza = p.sale_unit === 'pieza'
         return {
           'Producto': p.name,
           'SKU': p.sku || '',
@@ -101,11 +103,12 @@ export default function InventoryTable({ products, banos, accessories, brands, s
           'Marca': p.brand?.name || '',
           'Medida': p.size?.label || '',
           'Bodega': fmtBodegas(p.bodegas),
-          'Stock (cajas)': currentStock,
-          'm²/caja': p.sqm_per_box ?? '',
+          'Unidad': isPieza ? 'Pieza' : 'Caja',
+          'Stock': currentStock,
+          'm²/unidad': p.sqm_per_box ?? '',
           'Total m² en stock': p.sqm_per_box ? parseFloat((currentStock * p.sqm_per_box).toFixed(2)) : '',
           'Precio/m²': p.price_per_sqm ?? '',
-          'Precio/caja': p.price_per_box ?? '',
+          'Precio/unidad': p.price_per_box ?? '',
         }
       })
 
@@ -241,7 +244,7 @@ export default function InventoryTable({ products, banos, accessories, brands, s
                       : '—'}
                   </td>
                   <td style={{ fontSize: '13px' }}>{fmtBodegas(p.bodegas) || '—'}</td>
-                  <td><span className={`badge ${badgeForStock(stocks[p.id])}`}>{stocks[p.id]} cajas</span></td>
+                  <td><span className={`badge ${badgeForStock(stocks[p.id])}`}>{stocks[p.id]} {p.sale_unit === 'pieza' ? 'piezas' : 'cajas'}</span></td>
                   <td>
                     <div className="stock-control">
                       <button className="stock-btn" onClick={() => updateStock(p.id, stocks[p.id] - 1, 'product')} disabled={saving === p.id}>−</button>

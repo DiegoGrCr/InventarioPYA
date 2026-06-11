@@ -6,7 +6,7 @@ export default async function CalculadoraPage() {
 
   const { data: products } = await supabase
     .from('products')
-    .select('id, name, material, sqm_per_box, pieces_per_box, price_per_sqm, price_per_box, brand:brands(name), size:sizes(label)')
+    .select('id, name, material, sale_unit, sqm_per_box, pieces_per_box, price_per_sqm, price_per_box, brand:brands(name), size:sizes(label)')
     .eq('is_active', true)
     .order('name')
 

@@ -11,7 +11,7 @@ export default async function InventarioPage() {
   const [{ data: products }, { data: banos }, { data: accessories }, { data: brands }, { data: sizes }] = await Promise.all([
     supabase
       .from('products')
-      .select('id, name, stock, sku, material, brand_id, size_id, bodegas, price_per_sqm, price_per_box, sqm_per_box, brand:brands(name), size:sizes(label)')
+      .select('id, name, stock, sku, material, brand_id, size_id, bodegas, sale_unit, price_per_sqm, price_per_box, sqm_per_box, brand:brands(name), size:sizes(label)')
       .eq('is_active', true)
       .order('stock', { ascending: true }),
     supabase

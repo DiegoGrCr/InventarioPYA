@@ -28,6 +28,7 @@ export interface Product {
   color: string | null
   bodegas: string[] | null
   stock: number
+  sale_unit: 'caja' | 'pieza'
   pieces_per_box: number | null
   sqm_per_box: number | null
   price_per_sqm: number | null

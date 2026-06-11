@@ -96,7 +96,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     </div>
                   </div>
                 )}
-                {product.pieces_per_box && (
+                {product.sale_unit !== 'pieza' && product.pieces_per_box && (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Piezas/caja</span>
                     <span style={{ fontSize: '14px' }}>{product.pieces_per_box}</span>
@@ -104,7 +104,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 )}
                 {product.sqm_per_box && (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>m²/caja</span>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>{product.sale_unit === 'pieza' ? 'm²/pieza' : 'm²/caja'}</span>
                     <span style={{ fontSize: '14px' }}>{product.sqm_per_box}</span>
                   </div>
                 )}
@@ -124,13 +124,13 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               {product.price_per_box && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{formatPrice(product.price_per_box)}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>por caja</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{product.sale_unit === 'pieza' ? 'por pieza' : 'por caja'}</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <span className={`badge ${badgeClass}`} style={{ marginRight: '8px' }}>{getStockLabel(product.stock)}</span>
-                  <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{product.stock} cajas</span>
+                  <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{product.stock} {product.sale_unit === 'pieza' ? 'piezas' : 'cajas'}</span>
                 </div>
                 <StockControl productId={product.id} initialStock={product.stock} />
               </div>
