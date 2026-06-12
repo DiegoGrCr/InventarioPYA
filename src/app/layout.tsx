@@ -5,6 +5,7 @@ import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import InstallPrompt from '@/components/InstallPrompt'
 import { AdminProvider } from '@/contexts/AdminContext'
 import { isAdminSession } from '@/lib/auth'
+import { Analytics } from '@vercel/analytics/next'
 
 export const metadata: Metadata = {
   title: 'Pisos y Azulejos de Jalpan',
@@ -32,6 +33,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </AdminProvider>
         <ServiceWorkerRegistration />
         <InstallPrompt />
+        <Analytics />
       </body>
     </html>
   )
