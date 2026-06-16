@@ -46,15 +46,32 @@ export default function ProductCalculator({
   const m2Total = m2Net > 0 ? parseFloat((m2Net * (1 + waste / 100)).toFixed(4)) : 0
   const sqm     = sqmPerBox || 0
 
-  // ── Pisos ────────────────────────────────────────────────────────────────
-  const boxesNeeded  = !isPieza && sqm > 0 && m2Total > 0 ? Math.ceil(m2Total / sqm) : 0
-  const piecesNeeded = isPieza  && sqm > 0 && m2Total > 0 ? Math.ceil(m2Total / sqm) : 0
-  const supplierBoxes = isPieza && piecesPerBox && piecesNeeded > 0 ? Math.ceil(piecesNeeded / piecesPerBox) : 0
-  const floorCost    = !isPieza && pricePerBox && boxesNeeded > 0
-    ? boxesNeeded * pricePerBox
-    : isPieza && pricePerBox && piecesNeeded > 0
-    ? piecesNeeded * pricePerBox
-    : 0
+  // ── Pisos (caja) ─────────────────────────────────────────────────────────
+  const pcsBox      = piecesPerBox || 0
+  const priceBox    = pricePerSqm && sqm ? pricePerSqm * sqm : 0
+  const pricePiece  = priceBox && pcsBox ? priceBox / pcsBox : 0
+  const m2PerPiece  = sqm && pcsBox ? sqm / pcsBox : 0
+
+  // Opción A — solo cajas enteras (ceil), posible sobrante
+  const boxesA  = !isPieza && sqm > 0 && m2Total > 0 ? Math.ceil(m2Total / sqm) : 0
+  const m2A     = parseFloat((boxesA * sqm).toFixed(4))
+  const excessA = parseFloat((m2A - m2Total).toFixed(4))
+  const costA   = boxesA > 0 && priceBox > 0 ? boxesA * priceBox : 0
+
+  // Opción B — cajas (floor) + piezas sueltas
+  const boxesB       = !isPieza && sqm > 0 && m2Total > 0 ? Math.floor(m2Total / sqm) : 0
+  const m2FromBoxesB = parseFloat((boxesB * sqm).toFixed(4))
+  const m2RemB       = parseFloat((m2Total - m2FromBoxesB).toFixed(4))
+  const loosePieces  = m2RemB > 0 && m2PerPiece > 0 ? Math.ceil(m2RemB / m2PerPiece) : 0
+  const m2B          = parseFloat((m2FromBoxesB + loosePieces * m2PerPiece).toFixed(4))
+  const excessB      = parseFloat((m2B - m2Total).toFixed(4))
+  const costB        = boxesB * priceBox + loosePieces * pricePiece
+  const showOptionB  = !isPieza && loosePieces > 0 && sqm > 0 && pcsBox > 0
+
+  // ── Pisos (pieza) ────────────────────────────────────────────────────────
+  const piecesNeeded  = isPieza && sqm > 0 && m2Total > 0 ? Math.ceil(m2Total / sqm) : 0
+  const supplierBoxes = isPieza && pcsBox && piecesNeeded > 0 ? Math.ceil(piecesNeeded / pcsBox) : 0
+  const costPieza     = pricePerBox && piecesNeeded > 0 ? piecesNeeded * pricePerBox : 0
 
   // ── Pegapiso ─────────────────────────────────────────────────────────────
   const adhesiveBultos = m2Total > 0 ? Math.ceil(m2Total / 2) : 0
@@ -125,41 +142,99 @@ export default function ProductCalculator({
         {hasResults && (
           <div style={{ display: 'grid', gap: '10px' }}>
 
-            {/* Pisos */}
-            <div style={{ background: 'var(--primary-light)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 'var(--radius-sm)', padding: '12px 16px' }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--primary-hover)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
-                {isPieza ? 'Piezas necesarias' : 'Cajas necesarias'}
+            {/* Área total */}
+            {useWaste && (
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '6px 0' }}>
+                {m2Net.toFixed(2)} m² + {waste}% desperdicio = <strong style={{ color: 'var(--text)' }}>{m2Total.toFixed(2)} m²</strong>
               </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '36px', fontWeight: 800, color: 'var(--primary-hover)', lineHeight: 1 }}>
-                  {isPieza ? piecesNeeded : boxesNeeded}
-                </span>
-                <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                  {isPieza ? 'piezas' : 'cajas'}
-                </span>
-                {!isPieza && piecesPerBox && (
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    ({boxesNeeded * piecesPerBox} piezas en total)
-                  </span>
-                )}
-                {isPieza && supplierBoxes > 0 && (
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    ≈ {supplierBoxes} {supplierBoxes === 1 ? 'caja' : 'cajas'} del proveedor
-                  </span>
+            )}
+
+            {/* Pieza individual */}
+            {isPieza && (
+              <div style={{ background: 'var(--primary-light)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 'var(--radius-sm)', padding: '12px 16px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--primary-hover)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                  Piezas necesarias
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '36px', fontWeight: 800, color: 'var(--primary-hover)', lineHeight: 1 }}>{piecesNeeded}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>piezas</span>
+                  {supplierBoxes > 0 && (
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>≈ {supplierBoxes} {supplierBoxes === 1 ? 'caja' : 'cajas'} del proveedor</span>
+                  )}
+                </div>
+                {costPieza > 0 && (
+                  <div style={{ marginTop: '6px', fontSize: '15px', fontWeight: 700, color: 'var(--success)' }}>{formatPrice(costPieza)}</div>
                 )}
               </div>
-              {floorCost > 0 && (
-                <div style={{ marginTop: '6px', fontSize: '15px', fontWeight: 700, color: 'var(--success)' }}>
-                  {formatPrice(floorCost)}
-                  {pricePerSqm && <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-muted)', marginLeft: '6px' }}>{formatPrice(pricePerSqm)}/m²</span>}
+            )}
+
+            {/* Opción A — solo cajas */}
+            {!isPieza && boxesA > 0 && (
+              <div style={{ border: '1px solid rgba(99,102,241,0.3)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                <div style={{ background: 'var(--primary-light)', padding: '7px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--primary-hover)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Opción A — Solo cajas completas
+                  </span>
+                  {excessA > 0 && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>sobran {excessA.toFixed(2)} m²</span>}
                 </div>
-              )}
-              {useWaste && (
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  Base {m2Net.toFixed(2)} m² + {waste}% desperdicio = {m2Total.toFixed(2)} m²
+                <div style={{ padding: '12px 14px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ textAlign: 'center', minWidth: '60px' }}>
+                    <div style={{ fontSize: '36px', fontWeight: 800, color: 'var(--primary-hover)', lineHeight: 1 }}>{boxesA}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>cajas</div>
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    <div>Cubren <strong>{m2A.toFixed(2)} m²</strong></div>
+                    {pcsBox > 0 && <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{boxesA * pcsBox} piezas en total</div>}
+                  </div>
+                  {costA > 0 && (
+                    <>
+                      <div style={{ flex: 1 }} />
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--success)' }}>{formatPrice(costA)}</div>
+                        {priceBox > 0 && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{formatPrice(priceBox)}/caja</div>}
+                      </div>
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Opción B — cajas + piezas sueltas */}
+            {showOptionB && (
+              <div style={{ border: '1px solid rgba(34,211,238,0.3)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                <div style={{ background: 'var(--accent-light)', padding: '7px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Opción B — Cajas + piezas sueltas
+                  </span>
+                  {excessB < 0.001 ? <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>exacto</span>
+                    : <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>sobran {excessB.toFixed(2)} m²</span>}
+                </div>
+                <div style={{ padding: '12px 14px', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ textAlign: 'center', minWidth: '60px' }}>
+                    <div style={{ fontSize: '36px', fontWeight: 800, color: 'var(--primary-hover)', lineHeight: 1 }}>{boxesB}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>cajas</div>
+                  </div>
+                  <div style={{ fontSize: '18px', color: 'var(--text-muted)', fontWeight: 300 }}>+</div>
+                  <div style={{ textAlign: 'center', minWidth: '60px' }}>
+                    <div style={{ fontSize: '36px', fontWeight: 800, color: 'var(--accent)', lineHeight: 1 }}>{loosePieces}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>piezas sueltas</div>
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    <div>Cubren <strong>{m2B.toFixed(2)} m²</strong></div>
+                    {m2PerPiece > 0 && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{m2PerPiece.toFixed(4)} m²/pieza</div>}
+                  </div>
+                  {costB > 0 && (
+                    <>
+                      <div style={{ flex: 1 }} />
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--success)' }}>{formatPrice(costB)}</div>
+                        {pricePiece > 0 && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{formatPrice(pricePiece)}/pieza</div>}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Pegapiso */}
             <div style={{ background: 'var(--warning-light)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 'var(--radius-sm)', padding: '12px 16px' }}>
