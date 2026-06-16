@@ -14,7 +14,15 @@ type ProductSummary = {
   price_per_sqm: number | null
   price_per_box: number | null
   brand: { name: string } | null
-  size: { label: string } | null
+  size: { label: string; width: number | null; height: number | null } | null
+}
+
+function calcGroutKgPerSqm(widthCm: number, heightCm: number, material: string) {
+  const W = widthCm * 10
+  const H = heightCm * 10
+  const J = material === 'porcelana' ? 2 : 3
+  const T = material === 'porcelana' ? 10 : 8
+  return ((W + H) / (W * H)) * J * T * 1.8 * 1.15
 }
 
 const WASTE_OPTIONS = [
@@ -133,6 +141,16 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
   const boxesNeededPieza = piecesNeeded > 0 && pcsBox > 0 ? Math.ceil(piecesNeeded / pcsBox) : 0
 
   const adhesive  = m2Total > 0 ? Math.ceil(m2Total / 2) : 0
+
+  // ── Boquilla ──────────────────────────────────────────────────────────────
+  const sizeW = selectedProduct?.size?.width ?? null
+  const sizeH = selectedProduct?.size?.height ?? null
+  const groutKgPerSqm  = sizeW && sizeH ? calcGroutKgPerSqm(sizeW, sizeH, selectedProduct!.material) : null
+  const groutKgTotal   = groutKgPerSqm && m2Total > 0 ? parseFloat((groutKgPerSqm * m2Total).toFixed(2)) : null
+  const perduraCajas   = groutKgTotal ? Math.ceil(groutKgTotal / 5) : 0
+  const adhetecBotes   = groutKgTotal ? Math.floor(groutKgTotal / 5) : 0
+  const adhetecKgSuelto = groutKgTotal ? Math.ceil(groutKgTotal - adhetecBotes * 5) : 0
+
   const hasResults = m2Net > 0 && sqm > 0
 
   return (
@@ -473,7 +491,7 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
           )}
 
           {/* ── Pegapiso ── */}
-          <div style={{ border: '1px solid rgba(251,191,36,0.3)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: '16px' }}>
+          <div style={{ border: '1px solid rgba(251,191,36,0.3)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: '12px' }}>
             <div style={{ background: 'var(--warning-light)', padding: '8px 14px' }}>
               <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--warning)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Pegapiso recomendado
@@ -490,6 +508,47 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
               </div>
             </div>
           </div>
+
+          {/* ── Boquilla ── */}
+          {groutKgTotal && groutKgTotal > 0 && (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: '16px' }}>
+              <div style={{ padding: '8px 14px', background: 'var(--bg)', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Boquilla recomendada — {groutKgTotal} kg totales
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: 'var(--border)' }}>
+                <div style={{ background: 'var(--bg-surface)', padding: '14px 16px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '8px' }}>Perdura</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                    <span style={{ fontSize: '36px', fontWeight: 800, color: 'var(--accent)', lineHeight: 1 }}>{perduraCajas}</span>
+                    <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{perduraCajas === 1 ? 'caja' : 'cajas'}</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>5 kg c/u · solo por caja</div>
+                </div>
+                <div style={{ background: 'var(--bg-surface)', padding: '14px 16px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '8px' }}>Adhetec</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
+                    {adhetecBotes > 0 && (
+                      <>
+                        <span style={{ fontSize: '36px', fontWeight: 800, color: 'var(--accent)', lineHeight: 1 }}>{adhetecBotes}</span>
+                        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{adhetecBotes === 1 ? 'bote' : 'botes'}</span>
+                      </>
+                    )}
+                    {adhetecKgSuelto > 0 && (
+                      <>
+                        {adhetecBotes > 0 && <span style={{ fontSize: '16px', color: 'var(--text-muted)', fontWeight: 300 }}>+</span>}
+                        <span style={{ fontSize: '36px', fontWeight: 800, color: 'var(--accent)', lineHeight: 1 }}>{adhetecKgSuelto}</span>
+                        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>kg</span>
+                      </>
+                    )}
+                    {adhetecBotes === 0 && adhetecKgSuelto === 0 && (
+                      <span style={{ fontSize: '36px', fontWeight: 800, color: 'var(--accent)', lineHeight: 1 }}>—</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>botes 5 kg + kg sueltos</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ textAlign: 'center', padding: '40px 24px', color: 'var(--text-muted)' }}>
