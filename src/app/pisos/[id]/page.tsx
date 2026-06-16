@@ -6,6 +6,7 @@ import { formatPrice, getMaterialLabel, getStockStatus, getStockLabel } from '@/
 import { Pencil, Layers } from 'lucide-react'
 import StockControl from '@/components/products/StockControl'
 import DeleteProductBtn from '@/components/products/DeleteProductBtn'
+import ProductCalculator from '@/components/products/ProductCalculator'
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -150,6 +151,19 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{product.description}</p>
               </div>
             </div>
+          )}
+
+          {product.sqm_per_box && (
+            <ProductCalculator
+              saleUnit={product.sale_unit ?? 'caja'}
+              sqmPerBox={product.sqm_per_box}
+              piecesPerBox={product.pieces_per_box}
+              pricePerSqm={product.price_per_sqm}
+              pricePerBox={product.price_per_box}
+              sizeWidth={(product.size as any)?.width ?? null}
+              sizeHeight={(product.size as any)?.height ?? null}
+              material={product.material}
+            />
           )}
         </div>
       </div>
