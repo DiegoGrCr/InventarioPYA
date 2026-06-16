@@ -1,9 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState, useRef, useEffect } from 'react'
 import { Brand, Size } from '@/lib/types'
-import { X } from 'lucide-react'
 
 interface ProductFiltersProps {
   brands: Brand[]
@@ -14,17 +12,6 @@ interface ProductFiltersProps {
 export default function ProductFilters({ brands, sizes, currentFilters }: ProductFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const [searchInput, setSearchInput] = useState(currentFilters.search || '')
-
-  // Sync when the URL search param changes (e.g. from the header search)
-  useEffect(() => {
-    if (document.activeElement !== inputRef.current) {
-      setSearchInput(currentFilters.search || '')
-    }
-  }, [currentFilters.search])
 
   const setFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -33,46 +20,12 @@ export default function ProductFilters({ brands, sizes, currentFilters }: Produc
     router.replace(`/pisos?${params.toString()}`)
   }
 
-  const handleSearchChange = (value: string) => {
-    setSearchInput(value)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      const params = new URLSearchParams(searchParams.toString())
-      if (value) params.set('search', value)
-      else params.delete('search')
-      router.replace(`/pisos?${params.toString()}`)
-    }, 300)
-  }
+  const clearFilters = () => router.replace('/pisos')
 
-  const clearFilters = () => {
-    setSearchInput('')
-    router.replace('/pisos')
-  }
-
-  const hasFilters = currentFilters.material || currentFilters.brand_id || currentFilters.size_id || currentFilters.search
+  const hasFilters = currentFilters.material || currentFilters.brand_id || currentFilters.size_id
 
   return (
     <div className="filters-bar">
-      <div style={{ position: 'relative' }}>
-        <input
-          ref={inputRef}
-          type="text"
-          className="form-input"
-          placeholder="🔍 Buscar pisos..."
-          value={searchInput}
-          onChange={e => handleSearchChange(e.target.value)}
-          style={{ maxWidth: '240px', paddingRight: searchInput ? '32px' : undefined }}
-        />
-        {searchInput && (
-          <button
-            onClick={() => handleSearchChange('')}
-            style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-          >
-            <X size={13} />
-          </button>
-        )}
-      </div>
-
       <select
         className="form-select"
         value={currentFilters.material || ''}
