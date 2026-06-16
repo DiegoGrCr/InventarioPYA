@@ -8,7 +8,7 @@ import { Loader2 } from 'lucide-react'
 
 interface Props {
   initialProducts: Product[]
-  filters: { material?: string; brand_id?: string; size_id?: string; search?: string }
+  filters: { material?: string; brand_id?: string; size_id?: string; search?: string; sort?: string }
   initialHasMore: boolean
 }
 

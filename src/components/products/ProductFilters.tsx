@@ -6,7 +6,7 @@ import { Brand, Size } from '@/lib/types'
 interface ProductFiltersProps {
   brands: Brand[]
   sizes: Size[]
-  currentFilters: { material?: string; brand_id?: string; size_id?: string; search?: string }
+  currentFilters: { material?: string; brand_id?: string; size_id?: string; search?: string; sort?: string }
 }
 
 export default function ProductFilters({ brands, sizes, currentFilters }: ProductFiltersProps) {
@@ -22,7 +22,7 @@ export default function ProductFilters({ brands, sizes, currentFilters }: Produc
 
   const clearFilters = () => router.replace('/pisos')
 
-  const hasFilters = currentFilters.material || currentFilters.brand_id || currentFilters.size_id
+  const hasFilters = currentFilters.material || currentFilters.brand_id || currentFilters.size_id || currentFilters.sort
 
   return (
     <div className="filters-bar">
@@ -55,6 +55,17 @@ export default function ProductFilters({ brands, sizes, currentFilters }: Produc
       >
         <option value="">Medida</option>
         {sizes.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+      </select>
+
+      <select
+        className="form-select"
+        value={currentFilters.sort || ''}
+        onChange={e => setFilter('sort', e.target.value)}
+        style={{ maxWidth: '190px' }}
+      >
+        <option value="">Más recientes</option>
+        <option value="price_asc">Precio: menor a mayor</option>
+        <option value="price_desc">Precio: mayor a menor</option>
       </select>
 
       {hasFilters && (

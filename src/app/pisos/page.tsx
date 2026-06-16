@@ -7,7 +7,7 @@ import InfiniteProductGrid from '@/components/products/InfiniteProductGrid'
 
 const PAGE_SIZE = 12
 
-export default async function PisosPage({ searchParams }: { searchParams: Promise<{ material?: string; brand_id?: string; size_id?: string; search?: string }> }) {
+export default async function PisosPage({ searchParams }: { searchParams: Promise<{ material?: string; brand_id?: string; size_id?: string; search?: string; sort?: string }> }) {
   const params = await searchParams
   const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
@@ -16,8 +16,14 @@ export default async function PisosPage({ searchParams }: { searchParams: Promis
     .from('products')
     .select('*, brand:brands(*), size:sizes(*)')
     .eq('is_active', true)
-    .order('created_at', { ascending: false })
     .range(0, PAGE_SIZE - 1)
+
+  if (params.sort === 'price_asc')
+    query = query.order('price_per_sqm', { ascending: true, nullsFirst: false })
+  else if (params.sort === 'price_desc')
+    query = query.order('price_per_sqm', { ascending: false, nullsFirst: false })
+  else
+    query = query.order('created_at', { ascending: false })
 
   if (params.material) query = query.eq('material', params.material)
   if (params.brand_id) query = query.eq('brand_id', params.brand_id)
