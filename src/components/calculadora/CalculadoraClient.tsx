@@ -516,20 +516,31 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
           </div>
 
           {/* ── Boquilla ── */}
-          {groutKgTotal && groutKgTotal > 0 && (
+          {sizeW && sizeH && m2Total > 0 && (
             <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: '16px' }}>
-              <div style={{ padding: '8px 14px', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Boquilla — {groutKgTotal} kg · separación:
-                </span>
-                <select
-                  className="form-select"
-                  value={jointMm}
-                  onChange={e => setJointMm(parseFloat(e.target.value))}
-                  style={{ fontSize: '12px', padding: '3px 8px', width: 'auto' }}
-                >
-                  {JOINT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+              <div style={{ padding: '10px 14px', background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                  Boquilla — separación entre piezas
+                </div>
+                <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-surface)', padding: '3px', borderRadius: 'var(--radius-sm)', width: 'fit-content' }}>
+                  {JOINT_OPTIONS.map(o => (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => setJointMm(o.value)}
+                      style={{
+                        padding: '5px 12px', fontSize: '13px', fontWeight: 600, border: 'none',
+                        borderRadius: '5px', cursor: 'pointer', transition: 'all 150ms',
+                        background: jointMm === o.value ? 'var(--primary)' : 'transparent',
+                        color: jointMm === o.value ? '#fff' : 'var(--text-muted)',
+                        boxShadow: jointMm === o.value ? 'var(--shadow-sm)' : 'none',
+                      }}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                {groutKgTotal && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{groutKgTotal} kg totales</div>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: 'var(--border)' }}>
                 <div style={{ background: 'var(--bg-surface)', padding: '14px 16px' }}>
