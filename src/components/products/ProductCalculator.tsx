@@ -89,7 +89,7 @@ export default function ProductCalculator({
   // Adhetec — por bote (5 kg) + kg sueltos
   const adhetecBotes   = groutKgTotal ? Math.floor(groutKgTotal / 5) : 0
   const adhetecKgSuelto = groutKgTotal
-    ? parseFloat((groutKgTotal - adhetecBotes * 5).toFixed(1))
+    ? Math.ceil(groutKgTotal - adhetecBotes * 5)
     : 0
 
   const hasResults = m2Total > 0 && sqm > 0
