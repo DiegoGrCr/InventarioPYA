@@ -43,17 +43,17 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
       .select('id, name, image_url, price_per_sqm, stock, brand:brands(name), size:sizes(label)')
       .eq('is_active', true)
       .or(`name.ilike.${like},description.ilike.${like},color.ilike.${like},finish.ilike.${like}${sizeFilter}`)
-      .limit(12),
+      .limit(200),
     supabase.from('bano_products')
       .select('id, name, image_url, price, stock, brand, model')
       .eq('is_active', true)
       .or(`name.ilike.${like},description.ilike.${like},brand.ilike.${like},model.ilike.${like},color.ilike.${like}`)
-      .limit(12),
+      .limit(200),
     supabase.from('accessories')
       .select('id, name, image_url, price, stock, category, brand')
       .eq('is_active', true)
       .or(`name.ilike.${like},description.ilike.${like},brand.ilike.${like},color.ilike.${like}`)
-      .limit(12),
+      .limit(200),
   ])
 
   const pisos = pisosRes.data || []
