@@ -17,12 +17,17 @@ type ProductSummary = {
   size: { label: string; width: number | null; height: number | null } | null
 }
 
-function calcGroutKgPerSqm(widthCm: number, heightCm: number, material: string) {
-  const W = widthCm * 10
-  const H = heightCm * 10
-  const J = material === 'porcelana' ? 2 : 3
-  const T = material === 'porcelana' ? 10 : 8
-  return ((W + H) / (W * H)) * J * T * 1.8 * 1.15
+const JOINT_OPTIONS = [
+  { value: 3,   label: '3 mm' },
+  { value: 2,   label: '2 mm' },
+  { value: 1,   label: '1 mm' },
+  { value: 0.5, label: 'A hueso' },
+]
+
+// Calibrada contra etiqueta del bote (5 kg, separación 3 mm):
+// 20×20→12 m², 40×40→22 m², 60×60→30 m²
+function calcGroutKgPerSqm(widthCm: number, heightCm: number, jointMm: number): number {
+  return 4.58 * (widthCm + heightCm) / (widthCm * heightCm) * (jointMm / 3)
 }
 
 const WASTE_OPTIONS = [
@@ -51,6 +56,7 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
   // Waste is opt-in
   const [useWaste, setUseWaste]       = useState(false)
   const [wastePercent, setWastePercent] = useState('10')
+  const [jointMm, setJointMm]         = useState(3)
 
   const dropdownRef = useRef<HTMLDivElement>(null)
   const metrosRef   = useRef<HTMLInputElement>(null)
@@ -145,7 +151,7 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
   // ── Boquilla ──────────────────────────────────────────────────────────────
   const sizeW = selectedProduct?.size?.width ?? null
   const sizeH = selectedProduct?.size?.height ?? null
-  const groutKgPerSqm  = sizeW && sizeH ? calcGroutKgPerSqm(sizeW, sizeH, selectedProduct!.material) : null
+  const groutKgPerSqm  = sizeW && sizeH ? calcGroutKgPerSqm(sizeW, sizeH, jointMm) : null
   const groutKgTotal   = groutKgPerSqm && m2Total > 0 ? parseFloat((groutKgPerSqm * m2Total).toFixed(2)) : null
   const perduraCajas   = groutKgTotal ? Math.ceil(groutKgTotal / 5) : 0
   const adhetecBotes   = groutKgTotal ? Math.floor(groutKgTotal / 5) : 0
@@ -512,8 +518,18 @@ export default function CalculadoraClient({ products }: { products: ProductSumma
           {/* ── Boquilla ── */}
           {groutKgTotal && groutKgTotal > 0 && (
             <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginBottom: '16px' }}>
-              <div style={{ padding: '8px 14px', background: 'var(--bg)', fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Boquilla recomendada — {groutKgTotal} kg totales
+              <div style={{ padding: '8px 14px', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Boquilla — {groutKgTotal} kg · separación:
+                </span>
+                <select
+                  className="form-select"
+                  value={jointMm}
+                  onChange={e => setJointMm(parseFloat(e.target.value))}
+                  style={{ fontSize: '12px', padding: '3px 8px', width: 'auto' }}
+                >
+                  {JOINT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: 'var(--border)' }}>
                 <div style={{ background: 'var(--bg-surface)', padding: '14px 16px' }}>
