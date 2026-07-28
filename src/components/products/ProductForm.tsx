@@ -2,10 +2,12 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { createProduct, updateProduct } from '@/actions/products'
+import { createProduct, updateProduct, findProductsByName } from '@/actions/products'
 import { createClient } from '@/lib/supabase/client'
 import { Brand, Size, Product, WAREHOUSES } from '@/lib/types'
-import { Camera, Loader2, Save, CheckCircle } from 'lucide-react'
+import { Camera, Loader2, Save, CheckCircle, AlertTriangle } from 'lucide-react'
+
+type NameMatch = { id: string; name: string; brand: { name: string } | null; size: { label: string } | null }
 
 interface ProductFormProps {
   brands: Brand[]
@@ -27,6 +29,17 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
   const [piecesPerBox, setPiecesPerBox] = useState(product?.pieces_per_box?.toString() || '')
   const [saleUnit, setSaleUnit] = useState(product?.sale_unit || 'caja')
   const isPieza = saleUnit === 'pieza'
+
+  const [nameMatches, setNameMatches] = useState<NameMatch[]>([])
+  const nameCheckTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleNameChange = (value: string) => {
+    if (nameCheckTimeout.current) clearTimeout(nameCheckTimeout.current)
+    nameCheckTimeout.current = setTimeout(async () => {
+      const matches = await findProductsByName(value, product?.id)
+      setNameMatches(matches as NameMatch[])
+    }, 400)
+  }
 
   const computedPricePerBox = pricePerSqm && sqmPerBox && parseFloat(pricePerSqm) > 0 && parseFloat(sqmPerBox) > 0
     ? (parseFloat(pricePerSqm) * parseFloat(sqmPerBox)).toFixed(2)
@@ -147,7 +160,31 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
 
       <div className="form-group">
         <label className="form-label">Nombre del piso *</label>
-        <input type="text" name="name" className="form-input" required defaultValue={product?.name || ''} placeholder="Ej: Mármol Gris Brillante" />
+        <input
+          type="text"
+          name="name"
+          className="form-input"
+          required
+          defaultValue={product?.name || ''}
+          placeholder="Ej: Mármol Gris Brillante"
+          onChange={e => handleNameChange(e.target.value)}
+        />
+        {nameMatches.length > 0 && (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '8px 12px', background: 'var(--warning-light)', color: 'var(--warning)', borderRadius: 'var(--radius-sm)', marginTop: '8px', fontSize: '13px' }}>
+            <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+            <span>
+              Ya existe {nameMatches.length === 1 ? 'un piso' : `${nameMatches.length} pisos`} con este nombre: {' '}
+              {nameMatches.map((m, i) => (
+                <span key={m.id}>
+                  {i > 0 && ', '}
+                  <strong>{m.name}</strong>
+                  {(m.brand || m.size) && ` (${[m.brand?.name, m.size?.label].filter(Boolean).join(' · ')})`}
+                </span>
+              ))}
+              . Puedes continuar si es intencional (ej. otra medida o marca).
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="form-row">

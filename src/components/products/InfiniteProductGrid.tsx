@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getProductsPage } from '@/actions/products'
 import ProductCard from '@/components/products/ProductCard'
+import ScrollReveal from '@/components/ScrollReveal'
 import { Product } from '@/lib/types'
-import { Loader2 } from 'lucide-react'
 
 interface Props {
   initialProducts: Product[]
@@ -46,14 +46,30 @@ export default function InfiniteProductGrid({ initialProducts, filters, initialH
   return (
     <>
       <div className="product-grid">
-        {products.map((p) => <ProductCard key={p.id} product={p} />)}
+        {products.map((p, i) => (
+          <ScrollReveal key={p.id} delay={(i % 4) * 70}>
+            <ProductCard product={p} priority={i < 8} />
+          </ScrollReveal>
+        ))}
+        {loading && Array.from({ length: 4 }).map((_, i) => (
+          <div key={`skeleton-${i}`} className="skeleton-card">
+            <div className="skeleton skeleton-image" />
+            <div className="card-body">
+              <div className="skeleton skeleton-title" />
+              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                <div className="skeleton skeleton-badge" />
+                <div className="skeleton skeleton-badge" />
+              </div>
+              <div className="skeleton skeleton-text-sm" />
+            </div>
+            <div className="card-footer">
+              <div className="skeleton skeleton-text" style={{ width: 80 }} />
+              <div className="skeleton skeleton-text-sm" style={{ width: 90 }} />
+            </div>
+          </div>
+        ))}
       </div>
       <div ref={sentinelRef} style={{ height: '1px' }} />
-      {loading && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '32px' }}>
-          <Loader2 size={28} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
-        </div>
-      )}
       {!hasMore && products.length > 0 && (
         <p style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '13px' }}>
           — {products.length} productos —

@@ -1,4 +1,4 @@
-const CACHE = 'pya-jalpan-v2';
+const CACHE = 'pya-jalpan-v4';
 
 // Pre-cache shell pages so navegación funciona offline
 const SHELL = ['/', '/pisos', '/banos', '/complementos', '/inventario', '/calculadora'];

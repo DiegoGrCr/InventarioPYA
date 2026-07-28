@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { updateProductStock } from '@/actions/products'
+import { updateProductStock, updateProductsPriceBulk } from '@/actions/products'
 import { updateBanoStock } from '@/actions/banos'
 import { updateAccessoryStock } from '@/actions/accessories'
 import { getStockStatus } from '@/lib/utils'
-import { Layers, Toilet, Package, FileSpreadsheet, Loader2 } from 'lucide-react'
+import { Layers, Toilet, Package, FileSpreadsheet, Loader2, Tag } from 'lucide-react'
 
 type ExportScope = 'all' | 'brand' | 'size'
 type PisosOrderBy = 'name' | 'brand' | 'size'
@@ -60,6 +60,76 @@ export default function InventoryTable({ products, banos, accessories, brands, s
   const [selectedSizeId, setSelectedSizeId] = useState('')
   const [pisosOrderBy, setPisosOrderBy] = useState<PisosOrderBy>('name')
   const [exporting, setExporting] = useState(false)
+
+  const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({})
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkPrice, setBulkPrice] = useState('')
+  const [applyingBulk, setApplyingBulk] = useState(false)
+  const [filterBrandId, setFilterBrandId] = useState('')
+  const [filterSizeId, setFilterSizeId] = useState('')
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  const filteredProducts = products.filter(p =>
+    (!filterBrandId || p.brand_id === filterBrandId) &&
+    (!filterSizeId || p.size_id === filterSizeId)
+  )
+
+  const showFeedback = (type: 'success' | 'error', message: string) => {
+    setFeedback({ type, message })
+    setTimeout(() => setFeedback(null), 3500)
+  }
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.has(p.id))
+
+  const toggleSelectAllPisos = () => {
+    setSelectedIds(prev => {
+      if (allFilteredSelected) {
+        const next = new Set(prev)
+        filteredProducts.forEach(p => next.delete(p.id))
+        return next
+      }
+      const next = new Set(prev)
+      filteredProducts.forEach(p => next.add(p.id))
+      return next
+    })
+  }
+
+  const applyBulkPrice = async () => {
+    const newPrice = parseFloat(bulkPrice)
+    if (!newPrice || newPrice <= 0 || selectedIds.size === 0) return
+
+    const targets = products.filter(p => selectedIds.has(p.id))
+    if (!confirm(`¿Aplicar $${newPrice.toFixed(2)}/m² a ${targets.length} producto(s) seleccionado(s)?`)) return
+
+    setApplyingBulk(true)
+    const res = await updateProductsPriceBulk(
+      targets.map(p => ({ id: p.id, price_per_sqm: newPrice, sqm_per_box: p.sqm_per_box }))
+    )
+    setApplyingBulk(false)
+
+    if (res.error) {
+      showFeedback('error', res.error)
+      return
+    }
+
+    setPriceOverrides(prev => {
+      const next = { ...prev }
+      targets.forEach(p => { next[p.id] = newPrice })
+      return next
+    })
+    showFeedback('success', `Precio actualizado en ${targets.length} producto(s)`)
+    setSelectedIds(new Set())
+    setBulkPrice('')
+  }
 
   const updateStock = async (id: string, newStock: number, type: 'product' | 'bano' | 'accessory') => {
     if (newStock < 0) return
@@ -224,10 +294,77 @@ export default function InventoryTable({ products, banos, accessories, brands, s
         <button className={`tab ${tab === 'accesorios' ? 'active' : ''}`} onClick={() => setTab('accesorios')}><Package size={15} /> Adhesivos ({accessories.length})</button>
       </div>
 
+      {tab === 'pisos' && (
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Filtrar:</span>
+          <select
+            className="form-select"
+            style={{ fontSize: '13px', padding: '6px 10px', width: 'auto' }}
+            value={filterBrandId}
+            onChange={e => setFilterBrandId(e.target.value)}
+          >
+            <option value="">Todas las marcas</option>
+            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+          <select
+            className="form-select"
+            style={{ fontSize: '13px', padding: '6px 10px', width: 'auto' }}
+            value={filterSizeId}
+            onChange={e => setFilterSizeId(e.target.value)}
+          >
+            <option value="">Todas las medidas</option>
+            {sizes.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+          {(filterBrandId || filterSizeId) && (
+            <button className="btn btn-ghost" style={{ fontSize: '13px', padding: '6px 12px' }} onClick={() => { setFilterBrandId(''); setFilterSizeId('') }}>
+              Limpiar filtro
+            </button>
+          )}
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{filteredProducts.length} producto(s)</span>
+        </div>
+      )}
+
+      {tab === 'pisos' && selectedIds.size > 0 && (
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px', padding: '12px 16px', background: 'var(--primary-light)', borderRadius: 'var(--radius)', border: '1px solid rgba(99,102,241,0.3)' }}>
+          <Tag size={16} style={{ color: 'var(--primary-hover)', flexShrink: 0 }} />
+          <span style={{ fontSize: '13px', fontWeight: 600 }}>{selectedIds.size} seleccionado(s)</span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            className="form-input"
+            placeholder="Nuevo precio/m²"
+            style={{ width: '160px', padding: '6px 10px', fontSize: '13px' }}
+            value={bulkPrice}
+            onChange={e => setBulkPrice(e.target.value)}
+          />
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: '13px', padding: '6px 14px' }}
+            onClick={applyBulkPrice}
+            disabled={applyingBulk || !bulkPrice || parseFloat(bulkPrice) <= 0}
+          >
+            {applyingBulk ? <><Loader2 size={14} className="spin" /> Aplicando...</> : 'Aplicar precio'}
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: '13px', padding: '6px 14px' }} onClick={() => setSelectedIds(new Set())}>
+            Cancelar selección
+          </button>
+        </div>
+      )}
+
       <div className="table-container">
         <table className="table">
           <thead>
             <tr>
+              {tab === 'pisos' && (
+                <th style={{ width: '32px' }}>
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAllPisos}
+                  />
+                </th>
+              )}
               <th>Producto</th>
               {tab === 'pisos' && <><th>Marca</th><th>Medida</th><th>Precio/m²</th></>}
               {tab === 'banos' && <><th>Marca</th><th>Modelo</th></>}
@@ -238,14 +375,19 @@ export default function InventoryTable({ products, banos, accessories, brands, s
             </tr>
           </thead>
           <tbody>
-            {tab === 'pisos' && products.map(p => (
+            {tab === 'pisos' && filteredProducts.map(p => {
+              const price = priceOverrides[p.id] ?? p.price_per_sqm
+              return (
                 <tr key={p.id}>
+                  <td>
+                    <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelected(p.id)} />
+                  </td>
                   <td style={{ color: 'var(--text)', fontWeight: 500 }}>{p.name}</td>
                   <td>{p.brand?.name || '—'}</td>
                   <td>{p.size?.label || '—'}</td>
                   <td style={{ fontSize: '13px' }}>
-                    {p.price_per_sqm
-                      ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(p.price_per_sqm)
+                    {price
+                      ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(price)
                       : '—'}
                   </td>
                   <td style={{ fontSize: '13px' }}>{fmtBodegas(p.bodegas) || '—'}</td>
@@ -258,7 +400,8 @@ export default function InventoryTable({ products, banos, accessories, brands, s
                     </div>
                   </td>
                 </tr>
-            ))}
+              )
+            })}
             {tab === 'banos' && banos.map(b => (
               <tr key={b.id}>
                 <td style={{ color: 'var(--text)', fontWeight: 500 }}>{b.name}</td>
@@ -293,6 +436,14 @@ export default function InventoryTable({ products, banos, accessories, brands, s
           </tbody>
         </table>
       </div>
+
+      {feedback && (
+        <div className="toast-container">
+          <div className={`toast ${feedback.type === 'success' ? 'toast-success' : 'toast-error'}`}>
+            {feedback.message}
+          </div>
+        </div>
+      )}
     </>
   )
 }

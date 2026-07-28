@@ -1,11 +1,14 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Product } from '@/lib/types'
 import { formatPrice, getStockStatus, getStockLabel, getMaterialLabel } from '@/lib/utils'
 import { Layers } from 'lucide-react'
 
-export default function ProductCard({ product }: { product: Product }) {
+export default function ProductCard({ product, priority = false }: { product: Product; priority?: boolean }) {
+  const [imgLoaded, setImgLoaded] = useState(false)
   const stockStatus = getStockStatus(product.stock)
   const badgeClass = stockStatus === 'available' ? 'badge-success' : stockStatus === 'low' ? 'badge-warning' : 'badge-danger'
 
@@ -13,7 +16,27 @@ export default function ProductCard({ product }: { product: Product }) {
     <Link href={`/pisos/${product.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
       <div className="card-image-wrapper">
         {product.image_url ? (
-          <img src={product.image_url} alt={product.name} className="card-image" />
+          <>
+            {!imgLoaded && <div className="skeleton" style={{ position: 'absolute', inset: 0 }} />}
+            <Image
+              ref={(el) => {
+                // Si la imagen ya venía cargada del caché del navegador al montar
+                // (ej. tras un refresh), el evento "load" pudo dispararse antes de
+                // que React alcanzara a escucharlo — lo detectamos aquí también.
+                if (el?.complete) setImgLoaded(true)
+              }}
+              src={product.image_url}
+              alt={product.name}
+              fill
+              sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 280px"
+              priority={priority}
+              loading={priority ? undefined : 'lazy'}
+              className="card-image"
+              style={{ opacity: imgLoaded ? 1 : 0, transition: 'opacity 300ms ease' }}
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgLoaded(true)}
+            />
+          </>
         ) : (
           <div className="card-image-placeholder"><Layers size={48} strokeWidth={1} /></div>
         )}

@@ -71,6 +71,25 @@ export async function getProduct(id: string) {
   return data
 }
 
+export async function findProductsByName(name: string, excludeId?: string) {
+  const trimmed = name.trim()
+  if (!trimmed) return []
+
+  const supabase = await createServerSupabaseClient()
+  let query = supabase
+    .from('products')
+    .select('id, name, brand:brands(name), size:sizes(label)')
+    .ilike('name', trimmed)
+    .eq('is_active', true)
+    .limit(5)
+
+  if (excludeId) query = query.neq('id', excludeId)
+
+  const { data, error } = await query
+  if (error) return []
+  return data
+}
+
 export async function createProduct(formData: FormData) {
   const supabase = await createServerSupabaseClient()
 
@@ -142,6 +161,27 @@ export async function updateProduct(id: string, formData: FormData) {
   if (error) return { error: error.message }
   revalidatePath('/pisos')
   revalidatePath(`/pisos/${id}`)
+  revalidatePath('/')
+  return { success: true }
+}
+
+export async function updateProductsPriceBulk(
+  updates: { id: string; price_per_sqm: number; sqm_per_box: number | null }[]
+) {
+  const supabase = await createServerSupabaseClient()
+
+  const results = await Promise.all(
+    updates.map(({ id, price_per_sqm, sqm_per_box }) => {
+      const price_per_box = sqm_per_box ? parseFloat((price_per_sqm * sqm_per_box).toFixed(2)) : null
+      return supabase.from('products').update({ price_per_sqm, price_per_box }).eq('id', id)
+    })
+  )
+
+  const failed = results.filter(r => r.error)
+  if (failed.length > 0) return { error: `Fallaron ${failed.length} de ${updates.length} actualizaciones` }
+
+  revalidatePath('/pisos')
+  revalidatePath('/inventario')
   revalidatePath('/')
   return { success: true }
 }
