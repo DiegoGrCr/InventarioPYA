@@ -37,7 +37,7 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
     if (nameCheckTimeout.current) clearTimeout(nameCheckTimeout.current)
     nameCheckTimeout.current = setTimeout(async () => {
       const matches = await findProductsByName(value, product?.id)
-      setNameMatches(matches as NameMatch[])
+      setNameMatches(matches as unknown as NameMatch[])
     }, 400)
   }
 
