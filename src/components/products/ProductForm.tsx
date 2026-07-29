@@ -13,9 +13,10 @@ interface ProductFormProps {
   brands: Brand[]
   sizes: Size[]
   product?: Product
+  bodegaStock?: { bodega: string; stock: number }[]
 }
 
-export default function ProductForm({ brands, sizes, product }: ProductFormProps) {
+export default function ProductForm({ brands, sizes, product, bodegaStock = [] }: ProductFormProps) {
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
   const [loading, setLoading] = useState(false)
@@ -29,6 +30,15 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
   const [piecesPerBox, setPiecesPerBox] = useState(product?.pieces_per_box?.toString() || '')
   const [saleUnit, setSaleUnit] = useState(product?.sale_unit || 'caja')
   const isPieza = saleUnit === 'pieza'
+
+  const initialBodegaMap = Object.fromEntries(bodegaStock.map(b => [b.bodega, b.stock]))
+  const [bodegaEnabled, setBodegaEnabled] = useState<Record<string, boolean>>(
+    Object.fromEntries(WAREHOUSES.map(w => [w, w in initialBodegaMap]))
+  )
+  const [bodegaQty, setBodegaQty] = useState<Record<string, string>>(
+    Object.fromEntries(WAREHOUSES.map(w => [w, initialBodegaMap[w]?.toString() || '']))
+  )
+  const totalStock = WAREHOUSES.reduce((sum, w) => sum + (bodegaEnabled[w] ? parseInt(bodegaQty[w]) || 0 : 0), 0)
 
   const [nameMatches, setNameMatches] = useState<NameMatch[]>([])
   const nameCheckTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -226,11 +236,7 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
         </div>
       </div>
 
-      <div className="form-row-3">
-        <div className="form-group">
-          <label className="form-label">{isPieza ? 'Stock (piezas)' : 'Stock (cajas)'}</label>
-          <input type="number" name="stock" className="form-input" min="0" defaultValue={product?.stock ?? 0} />
-        </div>
+      <div className="form-row">
         <div className="form-group">
           <label className="form-label">Piezas/caja</label>
           <input
@@ -294,14 +300,38 @@ export default function ProductForm({ brands, sizes, product }: ProductFormProps
       </div>
 
       <div className="form-group">
-        <label className="form-label">Bodega(s)</label>
-        <div className="checkbox-group">
+        <label className="form-label">Stock por bodega</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {WAREHOUSES.map(w => (
-            <label key={w} className="checkbox-pill">
-              <input type="checkbox" name="bodegas" value={w} defaultChecked={product?.bodegas?.includes(w) || false} />
-              {w}
-            </label>
+            <div key={w} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label className="checkbox-pill" style={{ minWidth: '180px' }}>
+                <input
+                  type="checkbox"
+                  checked={bodegaEnabled[w]}
+                  onChange={e => setBodegaEnabled(prev => ({ ...prev, [w]: e.target.checked }))}
+                />
+                {w}
+              </label>
+              {bodegaEnabled[w] && (
+                <>
+                  <input type="hidden" name="bodega_nombre" value={w} />
+                  <input
+                    type="number"
+                    name="bodega_stock"
+                    className="form-input"
+                    min="0"
+                    style={{ maxWidth: '120px' }}
+                    placeholder={isPieza ? 'Piezas' : 'Cajas'}
+                    value={bodegaQty[w]}
+                    onChange={e => setBodegaQty(prev => ({ ...prev, [w]: e.target.value }))}
+                  />
+                </>
+              )}
+            </div>
           ))}
+        </div>
+        <div className="form-hint" style={{ marginTop: '8px' }}>
+          Stock total: <strong style={{ color: 'var(--text)' }}>{totalStock} {isPieza ? 'piezas' : 'cajas'}</strong>
         </div>
       </div>
 

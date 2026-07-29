@@ -6,6 +6,7 @@ import { formatPrice, getStockStatus, getStockLabel } from '@/lib/utils'
 import { Pencil, Toilet } from 'lucide-react'
 import BanoStockControl from '@/components/banos/BanoStockControl'
 import DeleteBanoBtn from '@/components/banos/DeleteBanoBtn'
+import BackButton from '@/components/BackButton'
 
 export default async function BanoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -27,7 +28,7 @@ export default async function BanoDetailPage({ params }: { params: Promise<{ id:
     <div className="fade-in">
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link href="/banos" className="btn btn-ghost btn-icon">←</Link>
+          <BackButton fallbackHref="/banos" />
           <div>
             <h1>{bano.name}</h1>
             {bano.model && <p>Mod. {bano.model}</p>}

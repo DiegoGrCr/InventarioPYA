@@ -495,6 +495,48 @@ h1, h2, h3 { letter-spacing: -0.02em; }
   gap: 20px;
 }
 
+/* ===== PAGINATION ===== */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 32px;
+}
+
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  transition: all var(--transition);
+}
+
+.pagination-btn:hover:not(:disabled) { background: var(--bg-surface-hover); color: var(--text); border-color: var(--text-muted); }
+.pagination-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pagination-btn.active { background: var(--primary); color: #ffffff; border-color: var(--primary); }
+
+.pagination-dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+@media (max-width: 480px) {
+  .pagination-btn { min-width: 32px; height: 32px; font-size: 13px; }
+}
+
 /* ===== STATS ===== */
 .stats-grid {
   display: grid;

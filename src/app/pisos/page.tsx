@@ -3,20 +3,26 @@ import { isAdminSession } from '@/lib/auth'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import ProductFilters from '@/components/products/ProductFilters'
-import InfiniteProductGrid from '@/components/products/InfiniteProductGrid'
+import ProductCard from '@/components/products/ProductCard'
+import ScrollReveal from '@/components/ScrollReveal'
+import Pagination from '@/components/products/Pagination'
 
-const PAGE_SIZE = 12
+const PAGE_SIZE = 20
 
-export default async function PisosPage({ searchParams }: { searchParams: Promise<{ material?: string; brand_id?: string; size_id?: string; search?: string; sort?: string }> }) {
+export default async function PisosPage({ searchParams }: { searchParams: Promise<{ material?: string; brand_id?: string; size_id?: string; search?: string; sort?: string; page?: string }> }) {
   const params = await searchParams
   const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
+
+  const page = Math.max(1, parseInt(params.page || '1') || 1)
+  const from = (page - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
 
   let query = supabase
     .from('products')
     .select('*, brand:brands(*), size:sizes(*)')
     .eq('is_active', true)
-    .range(0, PAGE_SIZE - 1)
+    .range(from, to)
 
   if (params.sort === 'price_asc')
     query = query.order('price_per_sqm', { ascending: true, nullsFirst: false })
@@ -47,9 +53,9 @@ export default async function PisosPage({ searchParams }: { searchParams: Promis
     supabase.from('sizes').select('*').order('width'),
   ])
 
-  const initial = products || []
+  const items = products || []
   const total = count || 0
-  const hasMore = initial.length === PAGE_SIZE && total > PAGE_SIZE
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <div className="fade-in">
@@ -69,13 +75,19 @@ export default async function PisosPage({ searchParams }: { searchParams: Promis
         />
       </Suspense>
 
-      {initial.length > 0 ? (
-        <InfiniteProductGrid
-          key={JSON.stringify(params)}
-          initialProducts={initial}
-          filters={params}
-          initialHasMore={hasMore}
-        />
+      {items.length > 0 ? (
+        <>
+          <div className="product-grid">
+            {items.map((p, i) => (
+              <ScrollReveal key={p.id} delay={(i % 4) * 70}>
+                <ProductCard product={p} priority={i < 8} />
+              </ScrollReveal>
+            ))}
+          </div>
+          <Suspense fallback={null}>
+            <Pagination page={page} totalPages={totalPages} />
+          </Suspense>
+        </>
       ) : (
         <div className="empty-state">
           <div className="empty-state-icon">🔍</div>

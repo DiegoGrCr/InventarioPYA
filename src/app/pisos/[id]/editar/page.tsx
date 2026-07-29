@@ -10,10 +10,11 @@ export default async function EditarPisoPage({ params }: { params: Promise<{ id:
 
   const supabase = await createServerSupabaseClient()
 
-  const [productRes, brandsRes, sizesRes] = await Promise.all([
+  const [productRes, brandsRes, sizesRes, bodegaStockRes] = await Promise.all([
     supabase.from('products').select('*, brand:brands(*), size:sizes(*)').eq('id', id).single(),
     supabase.from('brands').select('*').order('name'),
     supabase.from('sizes').select('*').order('width'),
+    supabase.from('product_bodega_stock').select('bodega, stock').eq('product_id', id).order('bodega'),
   ])
 
   if (!productRes.data) notFound()
@@ -29,7 +30,12 @@ export default async function EditarPisoPage({ params }: { params: Promise<{ id:
           </div>
         </div>
       </div>
-      <ProductForm brands={brandsRes.data || []} sizes={sizesRes.data || []} product={productRes.data} />
+      <ProductForm
+        brands={brandsRes.data || []}
+        sizes={sizesRes.data || []}
+        product={productRes.data}
+        bodegaStock={bodegaStockRes.data || []}
+      />
     </div>
   )
 }

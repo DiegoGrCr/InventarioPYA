@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
-import { updateProductStock, updateProductsPriceBulk } from '@/actions/products'
+import { useState, Fragment } from 'react'
+import { updateProductsPriceBulk, adjustProductBodegaStock } from '@/actions/products'
 import { updateBanoStock } from '@/actions/banos'
 import { updateAccessoryStock } from '@/actions/accessories'
 import { getStockStatus } from '@/lib/utils'
-import { Layers, Toilet, Package, FileSpreadsheet, Loader2, Tag } from 'lucide-react'
+import { WAREHOUSES } from '@/lib/types'
+import { Layers, Toilet, Package, FileSpreadsheet, Loader2, Tag, ChevronRight, ChevronDown } from 'lucide-react'
 
-type ExportScope = 'all' | 'brand' | 'size'
-type PisosOrderBy = 'name' | 'brand' | 'size'
+type ExportScope = 'all' | 'brand' | 'size' | 'bodega'
+type BodegaRow = { bodega: string; stock: number }
 
 interface InventoryTableProps {
   products: Array<{
@@ -19,14 +20,13 @@ interface InventoryTableProps {
     material: string
     brand_id: string | null
     size_id: string | null
-    bodegas: string[] | null
     sale_unit: 'caja' | 'pieza'
     price_per_sqm: number | null
     price_per_box: number | null
     sqm_per_box: number | null
     pieces_per_box: number | null
     brand: { name: string } | null
-    size: { label: string } | null
+    size: { label: string; width: number; height: number } | null
   }>
   banos: Array<{
     id: string
@@ -40,12 +40,13 @@ interface InventoryTableProps {
   }>
   accessories: Array<{ id: string; name: string; stock: number; category: string; bodegas: string[] | null }>
   brands: Array<{ id: string; name: string }>
-  sizes: Array<{ id: string; label: string }>
+  sizes: Array<{ id: string; label: string; width: number; height: number }>
+  bodegaStockByProduct: Record<string, BodegaRow[]>
 }
 
 const fmtBodegas = (bodegas: string[] | null) => (bodegas && bodegas.length > 0 ? bodegas.join(', ') : '')
 
-export default function InventoryTable({ products, banos, accessories, brands, sizes }: InventoryTableProps) {
+export default function InventoryTable({ products, banos, accessories, brands, sizes, bodegaStockByProduct }: InventoryTableProps) {
   const [tab, setTab] = useState<'pisos' | 'banos' | 'accesorios'>('pisos')
   const [stocks, setStocks] = useState<Record<string, number>>(() => {
     const map: Record<string, number> = {}
@@ -54,11 +55,13 @@ export default function InventoryTable({ products, banos, accessories, brands, s
     accessories.forEach(a => { map[a.id] = a.stock })
     return map
   })
+  const [bodegaMap, setBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByProduct)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState<string | null>(null)
   const [exportScope, setExportScope] = useState<ExportScope>('all')
   const [selectedBrandId, setSelectedBrandId] = useState('')
   const [selectedSizeId, setSelectedSizeId] = useState('')
-  const [pisosOrderBy, setPisosOrderBy] = useState<PisosOrderBy>('name')
+  const [selectedBodega, setSelectedBodega] = useState('')
   const [exporting, setExporting] = useState(false)
 
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({})
@@ -81,6 +84,15 @@ export default function InventoryTable({ products, banos, accessories, brands, s
 
   const toggleSelected = (id: string) => {
     setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleExpanded = (id: string) => {
+    setExpanded(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -131,13 +143,25 @@ export default function InventoryTable({ products, banos, accessories, brands, s
     setBulkPrice('')
   }
 
-  const updateStock = async (id: string, newStock: number, type: 'product' | 'bano' | 'accessory') => {
+  const updateStock = async (id: string, newStock: number, type: 'bano' | 'accessory') => {
     if (newStock < 0) return
     setStocks(prev => ({ ...prev, [id]: newStock }))
     setSaving(id)
-    if (type === 'product') await updateProductStock(id, newStock)
-    else if (type === 'bano') await updateBanoStock(id, newStock)
+    if (type === 'bano') await updateBanoStock(id, newStock)
     else await updateAccessoryStock(id, newStock)
+    setSaving(null)
+  }
+
+  const adjustBodega = async (productId: string, bodega: string, newStock: number) => {
+    if (newStock < 0) return
+    const savingKey = `${productId}:${bodega}`
+    setBodegaMap(prev => ({
+      ...prev,
+      [productId]: (prev[productId] || []).map(r => (r.bodega === bodega ? { ...r, stock: newStock } : r)),
+    }))
+    setSaving(savingKey)
+    const res = await adjustProductBodegaStock(productId, bodega, newStock)
+    if (res.total !== undefined) setStocks(prev => ({ ...prev, [productId]: res.total! }))
     setSaving(null)
   }
 
@@ -149,82 +173,55 @@ export default function InventoryTable({ products, banos, accessories, brands, s
   const exportToExcel = async () => {
     setExporting(true)
     try {
-      const XLSX = await import('xlsx')
+      const { buildInventoryWorkbook, downloadWorkbook } = await import('@/lib/excelExport')
 
-      let filtered = products
-      if (exportScope === 'brand' && selectedBrandId) {
-        filtered = products.filter(p => p.brand_id === selectedBrandId)
-      } else if (exportScope === 'size' && selectedSizeId) {
-        filtered = products.filter(p => p.size_id === selectedSizeId)
+      let scoped = products
+      if (exportScope === 'brand' && selectedBrandId) scoped = products.filter(p => p.brand_id === selectedBrandId)
+      else if (exportScope === 'size' && selectedSizeId) scoped = products.filter(p => p.size_id === selectedSizeId)
+
+      type Item = { name: string; formato: string; area: number; piezas: number | null; m2: number | null; stock: number; precio: number | null; brand: string }
+      let items: Item[] = []
+
+      if (exportScope === 'bodega' && selectedBodega) {
+        scoped.forEach(p => {
+          const row = (bodegaMap[p.id] || []).find(b => b.bodega === selectedBodega)
+          if (!row) return
+          items.push({
+            name: p.name,
+            formato: p.size?.label || 'Sin medida',
+            area: p.size ? p.size.width * p.size.height : 0,
+            piezas: p.sale_unit === 'pieza' ? null : p.pieces_per_box,
+            m2: p.sqm_per_box,
+            stock: row.stock,
+            precio: p.price_per_sqm,
+            brand: p.brand?.name || 'Sin marca',
+          })
+        })
+      } else {
+        items = scoped.map(p => ({
+          name: p.name,
+          formato: p.size?.label || 'Sin medida',
+          area: p.size ? p.size.width * p.size.height : 0,
+          piezas: p.sale_unit === 'pieza' ? null : p.pieces_per_box,
+          m2: p.sqm_per_box,
+          stock: stocks[p.id],
+          precio: p.price_per_sqm,
+          brand: p.brand?.name || 'Sin marca',
+        }))
       }
 
-      const sortedPisos = [...filtered].sort((a, b) => {
-        if (pisosOrderBy === 'brand') return (a.brand?.name || '').localeCompare(b.brand?.name || '')
-        if (pisosOrderBy === 'size') return (a.size?.label || '').localeCompare(b.size?.label || '')
-        return a.name.localeCompare(b.name)
+      const workbook = await buildInventoryWorkbook({
+        items,
+        banos: banos.map(b => ({ name: b.name, brand: b.brand, model: b.model, color: b.color, bodega: fmtBodegas(b.bodegas), stock: stocks[b.id], price: b.price })),
+        accessories: accessories.map(a => ({ name: a.name, category: a.category, bodega: fmtBodegas(a.bodegas), stock: stocks[a.id] })),
       })
-
-      const pisosRows = sortedPisos.map(p => {
-        const currentStock = stocks[p.id]
-        const isPieza = p.sale_unit === 'pieza'
-        return {
-          'Producto': p.name,
-          'SKU': p.sku || '',
-          'Material': p.material === 'ceramica' ? 'Cerámica' : 'Porcelana',
-          'Marca': p.brand?.name || '',
-          'Medida': p.size?.label || '',
-          'Bodega': fmtBodegas(p.bodegas),
-          'Unidad': isPieza ? 'Pieza' : 'Caja',
-          'Stock': currentStock,
-          'm²/unidad': p.sqm_per_box ?? '',
-          'Total m² en stock': p.sqm_per_box ? parseFloat((currentStock * p.sqm_per_box).toFixed(2)) : '',
-          'Precio/m²': p.price_per_sqm ?? '',
-          'Precio/unidad': p.price_per_box ?? '',
-          'Piezas/caja proveedor': isPieza ? (p.pieces_per_box ?? '') : '',
-          'Precio/caja proveedor': isPieza && p.price_per_box && p.pieces_per_box
-            ? parseFloat((p.price_per_box * p.pieces_per_box).toFixed(2))
-            : '',
-        }
-      })
-
-      const banosRows = banos.map(b => ({
-        'Producto': b.name,
-        'Marca': b.brand || '',
-        'Modelo': b.model || '',
-        'Color': b.color || '',
-        'Bodega': fmtBodegas(b.bodegas),
-        'Stock (piezas)': stocks[b.id],
-        'Precio': b.price ?? '',
-      }))
-
-      const accesoriosRows = accessories.map(a => ({
-        'Producto': a.name,
-        'Categoría': a.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla',
-        'Bodega': fmtBodegas(a.bodegas),
-        'Stock (unidades)': stocks[a.id],
-      }))
-
-      const wb = XLSX.utils.book_new()
-
-      const wsPisos = XLSX.utils.json_to_sheet(pisosRows.length > 0 ? pisosRows : [{ 'Producto': 'Sin resultados' }])
-      XLSX.utils.book_append_sheet(wb, wsPisos, 'Pisos')
-
-      const wsBanos = XLSX.utils.json_to_sheet(banosRows.length > 0 ? banosRows : [{ 'Producto': 'Sin resultados' }])
-      XLSX.utils.book_append_sheet(wb, wsBanos, 'Baños')
-
-      const wsAccesorios = XLSX.utils.json_to_sheet(accesoriosRows.length > 0 ? accesoriosRows : [{ 'Producto': 'Sin resultados' }])
-      XLSX.utils.book_append_sheet(wb, wsAccesorios, 'Adhesivos')
 
       let filename = 'inventario_general.xlsx'
-      if (exportScope === 'brand' && selectedBrandId) {
-        const brand = brands.find(b => b.id === selectedBrandId)
-        filename = `inventario_${(brand?.name || 'marca').replace(/\s+/g, '_')}.xlsx`
-      } else if (exportScope === 'size' && selectedSizeId) {
-        const size = sizes.find(s => s.id === selectedSizeId)
-        filename = `inventario_${(size?.label || 'medida').replace(/\s+/g, '_')}.xlsx`
-      }
+      if (exportScope === 'brand' && selectedBrandId) filename = `inventario_${(brands.find(b => b.id === selectedBrandId)?.name || 'marca').replace(/\s+/g, '_')}.xlsx`
+      else if (exportScope === 'size' && selectedSizeId) filename = `inventario_${(sizes.find(s => s.id === selectedSizeId)?.label || 'medida').replace(/\s+/g, '_')}.xlsx`
+      else if (exportScope === 'bodega' && selectedBodega) filename = `inventario_${selectedBodega.replace(/\s+/g, '_')}.xlsx`
 
-      XLSX.writeFile(wb, filename)
+      await downloadWorkbook(workbook, filename)
     } finally {
       setExporting(false)
     }
@@ -239,11 +236,12 @@ export default function InventoryTable({ products, banos, accessories, brands, s
           className="form-select"
           style={{ fontSize: '13px', padding: '6px 10px', width: 'auto' }}
           value={exportScope}
-          onChange={e => { setExportScope(e.target.value as ExportScope); setSelectedBrandId(''); setSelectedSizeId('') }}
+          onChange={e => { setExportScope(e.target.value as ExportScope); setSelectedBrandId(''); setSelectedSizeId(''); setSelectedBodega('') }}
         >
           <option value="all">Todos los pisos</option>
           <option value="brand">Por marca</option>
           <option value="size">Por medida</option>
+          <option value="bodega">Por bodega</option>
         </select>
         {exportScope === 'brand' && (
           <select
@@ -267,22 +265,27 @@ export default function InventoryTable({ products, banos, accessories, brands, s
             {sizes.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
         )}
-        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Pisos ordenados por:</span>
-        <select
-          className="form-select"
-          style={{ fontSize: '13px', padding: '6px 10px', width: 'auto' }}
-          value={pisosOrderBy}
-          onChange={e => setPisosOrderBy(e.target.value as PisosOrderBy)}
-        >
-          <option value="name">Nombre</option>
-          <option value="brand">Marca</option>
-          <option value="size">Medida</option>
-        </select>
+        {exportScope === 'bodega' && (
+          <select
+            className="form-select"
+            style={{ fontSize: '13px', padding: '6px 10px', width: 'auto' }}
+            value={selectedBodega}
+            onChange={e => setSelectedBodega(e.target.value)}
+          >
+            <option value="">Seleccionar bodega...</option>
+            {WAREHOUSES.map(w => <option key={w} value={w}>{w}</option>)}
+          </select>
+        )}
         <button
           className="btn btn-secondary"
           style={{ fontSize: '13px', padding: '6px 14px' }}
           onClick={exportToExcel}
-          disabled={exporting || (exportScope === 'brand' && !selectedBrandId) || (exportScope === 'size' && !selectedSizeId)}
+          disabled={
+            exporting ||
+            (exportScope === 'brand' && !selectedBrandId) ||
+            (exportScope === 'size' && !selectedSizeId) ||
+            (exportScope === 'bodega' && !selectedBodega)
+          }
         >
           {exporting ? <><Loader2 size={14} className="spin" /> Generando...</> : <><FileSpreadsheet size={14} /> Descargar Excel</>}
         </button>
@@ -377,29 +380,62 @@ export default function InventoryTable({ products, banos, accessories, brands, s
           <tbody>
             {tab === 'pisos' && filteredProducts.map(p => {
               const price = priceOverrides[p.id] ?? p.price_per_sqm
+              const rows = bodegaMap[p.id] || []
+              const isExpanded = expanded.has(p.id)
               return (
-                <tr key={p.id}>
-                  <td>
-                    <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelected(p.id)} />
-                  </td>
-                  <td style={{ color: 'var(--text)', fontWeight: 500 }}>{p.name}</td>
-                  <td>{p.brand?.name || '—'}</td>
-                  <td>{p.size?.label || '—'}</td>
-                  <td style={{ fontSize: '13px' }}>
-                    {price
-                      ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(price)
-                      : '—'}
-                  </td>
-                  <td style={{ fontSize: '13px' }}>{fmtBodegas(p.bodegas) || '—'}</td>
-                  <td><span className={`badge ${badgeForStock(stocks[p.id])}`}>{stocks[p.id]} {p.sale_unit === 'pieza' ? 'piezas' : 'cajas'}</span></td>
-                  <td>
-                    <div className="stock-control">
-                      <button className="stock-btn" onClick={() => updateStock(p.id, stocks[p.id] - 1, 'product')} disabled={saving === p.id}>−</button>
-                      <span className="stock-value" style={{ opacity: saving === p.id ? 0.5 : 1 }}>{stocks[p.id]}</span>
-                      <button className="stock-btn" onClick={() => updateStock(p.id, stocks[p.id] + 1, 'product')} disabled={saving === p.id}>+</button>
-                    </div>
-                  </td>
-                </tr>
+                <Fragment key={p.id}>
+                  <tr>
+                    <td>
+                      <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelected(p.id)} />
+                    </td>
+                    <td style={{ color: 'var(--text)', fontWeight: 500 }}>
+                      <button
+                        onClick={() => toggleExpanded(p.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'inherit', font: 'inherit', padding: 0 }}
+                      >
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        {p.name}
+                      </button>
+                    </td>
+                    <td>{p.brand?.name || '—'}</td>
+                    <td>{p.size?.label || '—'}</td>
+                    <td style={{ fontSize: '13px' }}>
+                      {price
+                        ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(price)
+                        : '—'}
+                    </td>
+                    <td style={{ fontSize: '13px' }}>{rows.map(r => r.bodega).join(', ') || '—'}</td>
+                    <td><span className={`badge ${badgeForStock(stocks[p.id])}`}>{stocks[p.id]} {p.sale_unit === 'pieza' ? 'piezas' : 'cajas'}</span></td>
+                    <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{stocks[p.id]}</td>
+                  </tr>
+                  {isExpanded && (
+                    rows.length > 0 ? rows.map(r => (
+                      <tr key={`${p.id}-${r.bodega}`} style={{ background: 'var(--bg)' }}>
+                        <td></td>
+                        <td style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-secondary)' }}>↳ {r.bodega}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td>
+                          <div className="stock-control">
+                            <button className="stock-btn" onClick={() => adjustBodega(p.id, r.bodega, r.stock - 1)} disabled={saving === `${p.id}:${r.bodega}` || r.stock <= 0}>−</button>
+                            <span className="stock-value" style={{ opacity: saving === `${p.id}:${r.bodega}` ? 0.5 : 1 }}>{r.stock}</span>
+                            <button className="stock-btn" onClick={() => adjustBodega(p.id, r.bodega, r.stock + 1)} disabled={saving === `${p.id}:${r.bodega}`}>+</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr style={{ background: 'var(--bg)' }}>
+                        <td></td>
+                        <td colSpan={7} style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                          Sin bodega asignada — edítalo desde &quot;Editar Piso&quot;
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </Fragment>
               )
             })}
             {tab === 'banos' && banos.map(b => (

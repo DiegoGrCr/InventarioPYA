@@ -6,6 +6,7 @@ import { formatPrice, getStockStatus, getStockLabel, getCategoryLabel } from '@/
 import { Pencil, Droplets, PaintBucket } from 'lucide-react'
 import AccessoryStockControl from '@/components/accessories/AccessoryStockControl'
 import DeleteAccessoryBtn from '@/components/accessories/DeleteAccessoryBtn'
+import BackButton from '@/components/BackButton'
 
 export default async function AccesorioDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -28,7 +29,7 @@ export default async function AccesorioDetailPage({ params }: { params: Promise<
     <div className="fade-in">
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link href="/complementos" className="btn btn-ghost btn-icon">←</Link>
+          <BackButton fallbackHref="/complementos" />
           <div>
             <h1>{acc.name}</h1>
             <p>{getCategoryLabel(acc.category)}</p>

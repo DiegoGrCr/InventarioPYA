@@ -4,20 +4,20 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { formatPrice, getMaterialLabel, getStockStatus, getStockLabel } from '@/lib/utils'
 import { Pencil, Layers } from 'lucide-react'
-import StockControl from '@/components/products/StockControl'
+import ProductBodegaStockControl from '@/components/products/ProductBodegaStockControl'
 import DeleteProductBtn from '@/components/products/DeleteProductBtn'
 import ProductCalculator from '@/components/products/ProductCalculator'
+import BackButton from '@/components/BackButton'
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
 
-  const { data: product } = await supabase
-    .from('products')
-    .select('*, brand:brands(*), size:sizes(*)')
-    .eq('id', id)
-    .single()
+  const [{ data: product }, { data: bodegaStock }] = await Promise.all([
+    supabase.from('products').select('*, brand:brands(*), size:sizes(*)').eq('id', id).single(),
+    supabase.from('product_bodega_stock').select('bodega, stock').eq('product_id', id).order('bodega'),
+  ])
 
   if (!product) notFound()
 
@@ -28,7 +28,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     <div className="fade-in">
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link href="/pisos" className="btn btn-ghost btn-icon">←</Link>
+          <BackButton fallbackHref="/pisos" />
           <div>
             <h1>{product.name}</h1>
             {product.sku && <p>SKU: {product.sku}</p>}
@@ -89,11 +89,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                     <span style={{ fontSize: '14px' }}>{product.color}</span>
                   </div>
                 )}
-                {product.bodegas && product.bodegas.length > 0 && (
+                {bodegaStock && bodegaStock.length > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Bodega</span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'flex-end' }}>
-                      {product.bodegas.map((b: string) => <span key={b} className="badge badge-accent">{b}</span>)}
+                      {bodegaStock.map(b => <span key={b.bodega} className="badge badge-accent">{b.bodega}</span>)}
                     </div>
                   </div>
                 )}
@@ -139,7 +139,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                   <span className={`badge ${badgeClass}`} style={{ marginRight: '8px' }}>{getStockLabel(product.stock)}</span>
                   <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{product.stock} {product.sale_unit === 'pieza' ? 'piezas' : 'cajas'}</span>
                 </div>
-                <StockControl productId={product.id} initialStock={product.stock} />
+                <ProductBodegaStockControl productId={product.id} initialStock={bodegaStock || []} />
               </div>
             </div>
           </div>

@@ -17,6 +17,7 @@ export default function ProductFilters({ brands, sizes, currentFilters }: Produc
     const params = new URLSearchParams(searchParams.toString())
     if (value) params.set(key, value)
     else params.delete(key)
+    params.delete('page')
     router.replace(`/pisos?${params.toString()}`)
   }
 
