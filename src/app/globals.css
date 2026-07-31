@@ -388,6 +388,38 @@ h1, h2, h3 { letter-spacing: -0.02em; }
 .btn-lg { padding: 14px 28px; font-size: 16px; }
 .btn-icon { padding: 8px; min-width: 36px; justify-content: center; }
 
+/* ===== SHARE MENU ===== */
+.share-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 180px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 6px;
+  animation: slideUp 150ms ease;
+}
+
+.share-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  transition: background var(--transition);
+}
+
+.share-menu-item:hover { background: var(--bg-surface-hover); }
+
 /* ===== CARDS ===== */
 .card {
   background: var(--bg-surface);

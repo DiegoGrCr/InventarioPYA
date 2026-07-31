@@ -7,6 +7,7 @@ import { Pencil, Droplets, PaintBucket } from 'lucide-react'
 import AccessoryStockControl from '@/components/accessories/AccessoryStockControl'
 import DeleteAccessoryBtn from '@/components/accessories/DeleteAccessoryBtn'
 import BackButton from '@/components/BackButton'
+import ShareButton from '@/components/ShareButton'
 
 export default async function AccesorioDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -35,14 +36,17 @@ export default async function AccesorioDetailPage({ params }: { params: Promise<
             <p>{getCategoryLabel(acc.category)}</p>
           </div>
         </div>
-        {isAdmin && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Link href={`/complementos/${id}/editar`} className="btn btn-secondary">
-              <Pencil size={15} /> Editar
-            </Link>
-            <DeleteAccessoryBtn accessoryId={id} />
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <ShareButton title={acc.name} />
+          {isAdmin && (
+            <>
+              <Link href={`/complementos/${id}/editar`} className="btn btn-secondary">
+                <Pencil size={15} /> Editar
+              </Link>
+              <DeleteAccessoryBtn accessoryId={id} />
+            </>
+          )}
+        </div>
       </div>
 
       <div className="detail-grid">

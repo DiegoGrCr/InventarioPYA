@@ -88,7 +88,10 @@ export async function replaceProductBodegaStock(productId: string, entries: { bo
   const { error: delError } = await supabase.from('product_bodega_stock').delete().eq('product_id', productId)
   if (delError) return { error: delError.message }
 
-  const rows = entries.filter(e => e.stock > 0).map(e => ({ product_id: productId, bodega: e.bodega, stock: e.stock }))
+  // No filtramos por stock > 0: una bodega marcada con 0 sigue siendo una
+  // asignación real (el material se sigue vendiendo/reabasteciendo ahí),
+  // solo se omiten las bodegas que ni siquiera se marcaron en el formulario.
+  const rows = entries.map(e => ({ product_id: productId, bodega: e.bodega, stock: e.stock }))
   if (rows.length > 0) {
     const { error: insError } = await supabase.from('product_bodega_stock').insert(rows)
     if (insError) return { error: insError.message }
@@ -160,7 +163,7 @@ export async function createProduct(formData: FormData) {
 
   if (error) return { error: error.message }
 
-  const rows = bodegaEntries.filter(e => e.stock > 0).map(e => ({ product_id: data.id, bodega: e.bodega, stock: e.stock }))
+  const rows = bodegaEntries.map(e => ({ product_id: data.id, bodega: e.bodega, stock: e.stock }))
   if (rows.length > 0) await supabase.from('product_bodega_stock').insert(rows)
 
   revalidatePath('/pisos')

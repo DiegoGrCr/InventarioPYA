@@ -7,6 +7,7 @@ import { Pencil, Toilet } from 'lucide-react'
 import BanoStockControl from '@/components/banos/BanoStockControl'
 import DeleteBanoBtn from '@/components/banos/DeleteBanoBtn'
 import BackButton from '@/components/BackButton'
+import ShareButton from '@/components/ShareButton'
 
 export default async function BanoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -34,14 +35,17 @@ export default async function BanoDetailPage({ params }: { params: Promise<{ id:
             {bano.model && <p>Mod. {bano.model}</p>}
           </div>
         </div>
-        {isAdmin && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Link href={`/banos/${id}/editar`} className="btn btn-secondary">
-              <Pencil size={15} /> Editar
-            </Link>
-            <DeleteBanoBtn banoId={id} />
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <ShareButton title={bano.name} />
+          {isAdmin && (
+            <>
+              <Link href={`/banos/${id}/editar`} className="btn btn-secondary">
+                <Pencil size={15} /> Editar
+              </Link>
+              <DeleteBanoBtn banoId={id} />
+            </>
+          )}
+        </div>
       </div>
 
       <div className="detail-grid">

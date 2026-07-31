@@ -8,6 +8,7 @@ import ProductBodegaStockControl from '@/components/products/ProductBodegaStockC
 import DeleteProductBtn from '@/components/products/DeleteProductBtn'
 import ProductCalculator from '@/components/products/ProductCalculator'
 import BackButton from '@/components/BackButton'
+import ShareButton from '@/components/ShareButton'
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -34,12 +35,15 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             {product.sku && <p>SKU: {product.sku}</p>}
           </div>
         </div>
-        {isAdmin && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <Link href={`/pisos/${id}/editar`} className="btn btn-secondary"><Pencil size={15} /> Editar</Link>
-            <DeleteProductBtn productId={id} />
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <ShareButton title={product.name} />
+          {isAdmin && (
+            <>
+              <Link href={`/pisos/${id}/editar`} className="btn btn-secondary"><Pencil size={15} /> Editar</Link>
+              <DeleteProductBtn productId={id} />
+            </>
+          )}
+        </div>
       </div>
 
       <div className="detail-grid">
