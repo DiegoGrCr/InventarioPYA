@@ -1,45 +1,19 @@
-export default function DashboardLoading() {
+export default function RootLoading() {
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <div className="skeleton skeleton-title" style={{ width: 120 }} />
-          <div className="skeleton skeleton-text-sm" style={{ width: 200, marginTop: 8 }} />
+    <>
+      <div className="splash-progress" />
+      <div className="splash">
+        <div className="splash-logo-wrap">
+          <span className="splash-ring" />
+          <span className="splash-ring splash-ring-delay" />
+          <img src="/logo1.png" alt="Pisos y Azulejos de Jalpan" className="splash-logo" />
         </div>
+        <h1 className="splash-title">Pisos y Azulejos de Jalpan</h1>
+        <p className="splash-subtitle">
+          Cargando tu catálogo
+          <span className="splash-dots"><span>.</span><span>.</span><span>.</span></span>
+        </p>
       </div>
-
-      <div className="stats-grid" style={{ marginBottom: 32 }}>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="skeleton-stat">
-            <div className="skeleton skeleton-icon" />
-            <div style={{ flex: 1 }}>
-              <div className="skeleton skeleton-title" style={{ width: 48, marginBottom: 8 }} />
-              <div className="skeleton skeleton-text-sm" style={{ width: 100 }} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="skeleton skeleton-title" style={{ width: 180, marginBottom: 16 }} />
-      <div className="product-grid">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="skeleton-card">
-            <div className="skeleton skeleton-image" />
-            <div className="card-body">
-              <div className="skeleton skeleton-title" />
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <div className="skeleton skeleton-badge" />
-                <div className="skeleton skeleton-badge" />
-              </div>
-              <div className="skeleton skeleton-text-sm" />
-            </div>
-            <div className="card-footer">
-              <div className="skeleton skeleton-text" style={{ width: 70 }} />
-              <div className="skeleton skeleton-text-sm" style={{ width: 80 }} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    </>
   )
 }

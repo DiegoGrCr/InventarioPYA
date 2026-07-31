@@ -206,21 +206,25 @@ export async function buildInventoryWorkbook({
     })
   }
 
-  addSimpleSheet(
-    workbook,
-    'Baños',
-    ['Producto', 'Marca', 'Modelo', 'Color', 'Bodega', 'Stock', 'Precio'],
-    banos.map(b => [b.name, b.brand || '', b.model || '', b.color || '', b.bodega, b.stock, b.price ?? '']),
-    usedNames
-  )
+  if (banos.length > 0) {
+    addSimpleSheet(
+      workbook,
+      'Baños',
+      ['Producto', 'Marca', 'Modelo', 'Color', 'Bodega', 'Stock', 'Precio'],
+      banos.map(b => [b.name, b.brand || '', b.model || '', b.color || '', b.bodega, b.stock, b.price ?? '']),
+      usedNames
+    )
+  }
 
-  addSimpleSheet(
-    workbook,
-    'Adhesivos',
-    ['Producto', 'Categoría', 'Bodega', 'Stock'],
-    accessories.map(a => [a.name, a.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla', a.bodega, a.stock]),
-    usedNames
-  )
+  if (accessories.length > 0) {
+    addSimpleSheet(
+      workbook,
+      'Adhesivos',
+      ['Producto', 'Categoría', 'Bodega', 'Stock'],
+      accessories.map(a => [a.name, a.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla', a.bodega, a.stock]),
+      usedNames
+    )
+  }
 
   return workbook
 }

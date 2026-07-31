@@ -14,7 +14,25 @@ const DISMISS_DAYS = 7
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [show, setShow] = useState(false)
+  const [closing, setClosing] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
+
+  const dismiss = (permanent: boolean) => {
+    setClosing(true)
+    setTimeout(() => {
+      setShow(false)
+      setClosing(false)
+      if (permanent) localStorage.setItem(DISMISS_KEY, Date.now().toString())
+    }, 250)
+  }
+
+  // Se cierra solo a los 10s si nadie interactúa con él
+  useEffect(() => {
+    if (!show) return
+    const t = setTimeout(() => dismiss(false), 10000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show])
 
   useEffect(() => {
     // Ya instalada como PWA — no mostrar
@@ -47,13 +65,8 @@ export default function InstallPrompt() {
     if (!deferredPrompt) return
     await deferredPrompt.prompt()
     const { outcome } = await deferredPrompt.userChoice
-    if (outcome === 'accepted') setShow(false)
+    if (outcome === 'accepted') dismiss(true)
     setDeferredPrompt(null)
-  }
-
-  const handleDismiss = () => {
-    setShow(false)
-    localStorage.setItem(DISMISS_KEY, Date.now().toString())
   }
 
   if (!show) return null
@@ -62,52 +75,52 @@ export default function InstallPrompt() {
     <div style={{
       position: 'fixed',
       bottom: 'calc(var(--mobile-nav-height, 65px) + 12px)',
-      left: '12px',
       right: '12px',
+      maxWidth: '300px',
       background: 'var(--bg-surface)',
-      border: '1px solid var(--primary)',
+      border: '1px solid var(--border)',
       borderRadius: 'var(--radius)',
-      padding: '14px 16px',
+      padding: '12px 14px',
       display: 'flex',
       alignItems: 'center',
-      gap: '12px',
+      gap: '10px',
       zIndex: 400,
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-      animation: 'slideUp 300ms ease',
+      boxShadow: 'var(--shadow)',
+      animation: closing ? 'installPromptOut 250ms ease forwards' : 'slideUp 300ms ease',
     }}>
       <img
         src="/icons/icon-72x72.png"
         alt="Icono"
-        style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0 }}
+        style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0 }}
       />
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontWeight: 700, fontSize: '14px', marginBottom: 2 }}>
+        <p style={{ fontWeight: 700, fontSize: '13px', marginBottom: 1 }}>
           Instalar PYA Jalpan
         </p>
         {isIOS ? (
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-            Toca <Share size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> <strong>Compartir</strong> y luego <strong>"Agregar a inicio"</strong>
+          <p style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+            Toca <Share size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> <strong>Compartir</strong> y <strong>"Agregar a inicio"</strong>
           </p>
         ) : (
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-            Acceso rápido sin abrir el navegador
+          <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+            Acceso rápido sin el navegador
           </p>
         )}
       </div>
 
       {!isIOS && (
-        <button className="btn btn-primary btn-sm" onClick={handleInstall} style={{ flexShrink: 0 }}>
-          <Download size={13} /> Instalar
+        <button className="btn btn-primary btn-sm" onClick={handleInstall} style={{ flexShrink: 0, padding: '5px 10px', fontSize: '12px' }}>
+          <Download size={12} /> Instalar
         </button>
       )}
 
       <button
-        onClick={handleDismiss}
+        onClick={() => dismiss(true)}
         style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', flexShrink: 0 }}
         aria-label="Cerrar"
       >
-        <X size={16} />
+        <X size={15} />
       </button>
     </div>
   )

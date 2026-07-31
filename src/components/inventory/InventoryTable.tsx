@@ -210,10 +210,17 @@ export default function InventoryTable({ products, banos, accessories, brands, s
         }))
       }
 
+      const scopedBanos = exportScope === 'bodega' && selectedBodega
+        ? banos.filter(b => (b.bodegas || []).includes(selectedBodega))
+        : banos
+      const scopedAccessories = exportScope === 'bodega' && selectedBodega
+        ? accessories.filter(a => (a.bodegas || []).includes(selectedBodega))
+        : accessories
+
       const workbook = await buildInventoryWorkbook({
         items,
-        banos: banos.map(b => ({ name: b.name, brand: b.brand, model: b.model, color: b.color, bodega: fmtBodegas(b.bodegas), stock: stocks[b.id], price: b.price })),
-        accessories: accessories.map(a => ({ name: a.name, category: a.category, bodega: fmtBodegas(a.bodegas), stock: stocks[a.id] })),
+        banos: scopedBanos.map(b => ({ name: b.name, brand: b.brand, model: b.model, color: b.color, bodega: fmtBodegas(b.bodegas), stock: stocks[b.id], price: b.price })),
+        accessories: scopedAccessories.map(a => ({ name: a.name, category: a.category, bodega: fmtBodegas(a.bodegas), stock: stocks[a.id] })),
       })
 
       let filename = 'inventario_general.xlsx'
