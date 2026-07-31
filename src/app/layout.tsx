@@ -3,6 +3,7 @@ import './globals.css'
 import AppShell from '@/components/layout/AppShell'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import InstallPrompt from '@/components/InstallPrompt'
+import AssistantWidget from '@/components/AssistantWidget'
 import { AdminProvider } from '@/contexts/AdminContext'
 import { isAdminSession } from '@/lib/auth'
 import { Analytics } from '@vercel/analytics/next'
@@ -33,6 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </AdminProvider>
         <ServiceWorkerRegistration />
         <InstallPrompt />
+        <AssistantWidget />
         <Analytics />
       </body>
     </html>
