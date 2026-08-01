@@ -15,7 +15,10 @@ conversación de vuelta a diseño de interiores/pisos.
 Responde siempre en español, de forma breve, cálida y útil: uno o dos párrafos cortos como máximo, sin
 usar encabezados ni listas con viñetas (esto se muestra en una burbuja de chat pequeña).`
 
-const MODEL = 'gemini-flash-latest'
+// "gemini-flash-latest" apunta a un modelo muy nuevo con cuota gratuita
+// de solo 20 solicitudes/día. "flash-lite" es más liviano y tiene una
+// cuota gratuita bastante más generosa — mejor para este caso de uso.
+const MODEL = 'gemini-flash-lite-latest'
 const MAX_MESSAGE_LENGTH = 500
 const MAX_HISTORY = 6
 
