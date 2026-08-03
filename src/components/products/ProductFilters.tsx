@@ -6,7 +6,7 @@ import { Brand, Size } from '@/lib/types'
 interface ProductFiltersProps {
   brands: Brand[]
   sizes: Size[]
-  currentFilters: { material?: string; brand_id?: string; size_id?: string; search?: string; sort?: string }
+  currentFilters: { material?: string; brand_id?: string; size_id?: string; search?: string; color?: string; finish?: string; format?: string; sort?: string }
 }
 
 export default function ProductFilters({ brands, sizes, currentFilters }: ProductFiltersProps) {
@@ -24,6 +24,7 @@ export default function ProductFilters({ brands, sizes, currentFilters }: Produc
   const clearFilters = () => router.replace('/pisos')
 
   const hasFilters = currentFilters.material || currentFilters.brand_id || currentFilters.size_id || currentFilters.sort
+    || currentFilters.color || currentFilters.finish || currentFilters.format || currentFilters.search
 
   return (
     <div className="filters-bar">

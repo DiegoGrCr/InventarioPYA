@@ -1275,6 +1275,16 @@ h1, h2, h3 { letter-spacing: -0.02em; }
   border-radius: 999px;
 }
 
+.assistant-catalog-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-hover);
+  text-decoration: none;
+}
+.assistant-catalog-link:hover { text-decoration: underline; }
+
 .assistant-contacts {
   display: flex;
   flex-direction: column;
@@ -1298,7 +1308,6 @@ h1, h2, h3 { letter-spacing: -0.02em; }
   transition: background var(--transition);
 }
 .assistant-contact-btn:hover { background: rgba(37,211,102,0.2); }
-.assistant-contact-dot { color: #25D366; font-size: 14px; }
 
 @media (prefers-reduced-motion: reduce) {
   .assistant-fab { animation: none; }

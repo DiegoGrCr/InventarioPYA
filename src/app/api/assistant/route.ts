@@ -76,14 +76,15 @@ const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL
 const TOOLS = [{
   functionDeclarations: [{
     name: 'buscar_pisos',
-    description: 'Busca pisos/azulejos en el catálogo real de la tienda. "texto" busca de forma amplia en nombre, descripción y acabado (úsalo para características generales que no sean color, ej. "rústico", "para exterior"). Los demás parámetros son filtros exactos que se combinan entre sí. Devuelve hasta 8 resultados con precio, existencia y ACABADO reales. IMPORTANTE: si el cliente menciona un color, pásalo en "color". Para el PISO de un baño/zona húmeda, usa siempre "acabado: Mate" en vez de poner "antiderrapante" en texto — es más confiable.',
+    description: 'Busca pisos/azulejos en el catálogo real de la tienda. "texto" busca de forma amplia en nombre, descripción y acabado (úsalo para características generales que no sean color, ej. "rústico", "para exterior"). Los demás parámetros son filtros exactos que se combinan entre sí. Devuelve hasta 8 resultados con precio, existencia y ACABADO reales. IMPORTANTE: si el cliente menciona un color, pásalo en "color". Para el PISO de un baño/zona húmeda, usa siempre "acabado: Mate" en vez de poner "antiderrapante" en texto — es más confiable. Si el cliente pide formato "cuadrado" o "rectangular" SIN pedir una medida exacta, usa el parámetro "formato" (no trates de adivinar cuáles medidas son cuadradas ni menciones en tu respuesta productos que la búsqueda no haya devuelto).',
     parameters: {
       type: 'OBJECT',
       properties: {
         texto: { type: 'STRING', description: 'Búsqueda libre en nombre, descripción y acabado del piso (no uses esto para colores)' },
         material: { type: 'STRING', enum: ['ceramica', 'porcelana'], description: 'Tipo de material' },
         marca: { type: 'STRING', description: 'Marca del piso, ej. Daltile, Cesantoni, Porcelanite' },
-        medida: { type: 'STRING', description: 'Medida del piso, ej. 30x60, 60x60' },
+        medida: { type: 'STRING', description: 'Medida exacta del piso, ej. 30x60, 60x60. No la uses junto con "formato".' },
+        formato: { type: 'STRING', enum: ['cuadrado', 'rectangular'], description: 'Usa esto cuando el cliente pida formato cuadrado o rectangular sin especificar una medida exacta.' },
         color: { type: 'STRING', description: 'Color del piso, ej. Blanco, Gris, Beige, Negro' },
         acabado: { type: 'STRING', description: 'Acabado del piso, ej. Mate, Brillante, Satinado. Usa "Mate" para pisos de baño/zonas húmedas.' },
       },
@@ -128,8 +129,9 @@ interface ProductoEncontrado {
   bodegas: { bodega: string; sucursal: string; stock: number }[]
 }
 
-async function buscarPisos(args: { texto?: string; material?: string; marca?: string; medida?: string; color?: string; acabado?: string }) {
+async function buscarPisos(args: { texto?: string; material?: string; marca?: string; medida?: string; formato?: string; color?: string; acabado?: string }) {
   const supabase = await createServerSupabaseClient()
+  const filtros: { brand_id?: string; size_id?: string } = {}
 
   let query = supabase
     .from('products')
@@ -163,17 +165,31 @@ async function buscarPisos(args: { texto?: string; material?: string; marca?: st
     const { data: brand } = await supabase.from('brands').select('id').ilike('name', `%${args.marca}%`).limit(1).maybeSingle()
     if (!brand) return { productos: [] as ProductoEncontrado[], nota: `No encontré la marca "${args.marca}" en el catálogo.` }
     query = query.eq('brand_id', brand.id)
+    filtros.brand_id = brand.id
   }
 
   if (args.medida) {
     const { data: size } = await supabase.from('sizes').select('id').ilike('label', `%${args.medida}%`).limit(1).maybeSingle()
     if (!size) return { productos: [] as ProductoEncontrado[], nota: `No encontré la medida "${args.medida}" en el catálogo.` }
     query = query.eq('size_id', size.id)
+    filtros.size_id = size.id
+  }
+
+  // "Formato" (cuadrado/rectangular) no es una columna directa — se calcula
+  // comparando ancho y alto de cada medida, por eso se resuelve a una lista de
+  // size_id en vez de un filtro simple como los demás.
+  if (args.formato === 'cuadrado' || args.formato === 'rectangular') {
+    const { data: sizes } = await supabase.from('sizes').select('id, width, height')
+    const sizeIds = (sizes || [])
+      .filter(s => args.formato === 'cuadrado' ? s.width === s.height : s.width !== s.height)
+      .map(s => s.id)
+    if (sizeIds.length === 0) return { productos: [] as ProductoEncontrado[], nota: `No hay medidas de formato ${args.formato} en el catálogo.` }
+    query = query.in('size_id', sizeIds)
   }
 
   const { data, error } = await query
   if (error) return { productos: [] as ProductoEncontrado[], error: error.message }
-  if (!data || data.length === 0) return { productos: [] as ProductoEncontrado[], nota: 'No se encontraron pisos que coincidan con esa búsqueda.' }
+  if (!data || data.length === 0) return { productos: [] as ProductoEncontrado[], nota: 'No se encontraron pisos que coincidan con esa búsqueda.', filtros }
 
   const { data: bodegaRows } = await supabase
     .from('product_bodega_stock')
@@ -206,7 +222,7 @@ async function buscarPisos(args: { texto?: string; material?: string; marca?: st
     })),
   }))
 
-  return { productos }
+  return { productos, filtros }
 }
 
 function quotaErrorReply(data: { error?: { code?: number; status?: string } }) {
@@ -273,16 +289,26 @@ export async function POST(req: NextRequest) {
 
     // Preguntas de seguimiento (ej. "¿y para el piso?" después de hablar de la pared)
     // pueden hacer que el modelo quiera buscar más de una vez en la misma respuesta,
-    // así que permitimos varias rondas de function-calling en vez de solo una.
-    const productosPorId = new Map<string, ProductoEncontrado>()
+    // así que permitimos varias rondas de function-calling en vez de solo una. Solo
+    // nos quedamos con los resultados de la ÚLTIMA ronda que sí encontró algo (no
+    // acumulamos todas las rondas): las rondas anteriores suelen ser intentos más
+    // amplios que el modelo descarta al ir afinando filtros (medida/acabado/color),
+    // así que mostrar esos resultados viejos junto a la respuesta final confunde —
+    // el texto habla de lo que encontró al final, las tarjetas deben coincidir.
+    let ultimosProductos: ProductoEncontrado[] = []
+    let ultimaBusqueda: { args: Record<string, string>; filtros: { brand_id?: string; size_id?: string } } | null = null
     const MAX_TOOL_ROUNDS = 3
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const functionCallPart = data.candidates?.[0]?.content?.parts?.find((p: { functionCall?: unknown }) => p.functionCall)
       if (!functionCallPart || functionCallPart.functionCall?.name !== 'buscar_pisos') break
 
-      const resultado = await buscarPisos(functionCallPart.functionCall.args || {})
-      resultado.productos.forEach(p => productosPorId.set(p.id, p))
+      const args = functionCallPart.functionCall.args || {}
+      const resultado = await buscarPisos(args)
+      if (resultado.productos.length > 0) {
+        ultimosProductos = resultado.productos
+        ultimaBusqueda = { args, filtros: resultado.filtros || {} }
+      }
 
       contents.push({ role: 'model', parts: [functionCallPart] })
       contents.push({
@@ -306,13 +332,29 @@ export async function POST(req: NextRequest) {
     // llamadas a función forzadas a "NONE" arriba) — en vez de mostrarle un error
     // al usuario, damos una respuesta honesta genérica con lo que ya se encontró.
     const reply = data.candidates?.[0]?.content?.parts?.find((p: { text?: string }) => p.text)?.text
-      || (productosPorId.size > 0
+      || (ultimosProductos.length > 0
         ? 'Encontré esto que podría interesarte:'
         : 'No logré encontrar algo que coincida exactamente, ¿me das más detalles (color, medida, marca) o prefieres revisar el catálogo completo en la página?')
 
-    // Mandamos todos los productos encontrados (tengan foto o no) para que el
+    // Mandamos los productos de la última búsqueda (tengan foto o no) para que el
     // widget muestre siempre una tarjeta con link a la página real del piso.
-    const productosParaMostrar = Array.from(productosPorId.values()).slice(0, 6)
+    const productosParaMostrar = ultimosProductos.slice(0, 6)
+
+    // Enlace al catálogo completo con los mismos filtros de la última búsqueda,
+    // para que el cliente pueda ver TODOS los resultados (aquí solo mostramos
+    // hasta 6 tarjetas, pero puede haber más en existencia).
+    let catalogoUrl: string | undefined
+    if (ultimaBusqueda) {
+      const qs = new URLSearchParams()
+      if (ultimaBusqueda.args.texto) qs.set('search', ultimaBusqueda.args.texto)
+      if (ultimaBusqueda.args.material === 'ceramica' || ultimaBusqueda.args.material === 'porcelana') qs.set('material', ultimaBusqueda.args.material)
+      if (ultimaBusqueda.args.color) qs.set('color', ultimaBusqueda.args.color)
+      if (ultimaBusqueda.args.acabado) qs.set('finish', ultimaBusqueda.args.acabado)
+      if (ultimaBusqueda.args.formato === 'cuadrado' || ultimaBusqueda.args.formato === 'rectangular') qs.set('format', ultimaBusqueda.args.formato)
+      if (ultimaBusqueda.filtros.brand_id) qs.set('brand_id', ultimaBusqueda.filtros.brand_id)
+      if (ultimaBusqueda.filtros.size_id) qs.set('size_id', ultimaBusqueda.filtros.size_id)
+      catalogoUrl = `/pisos?${qs.toString()}`
+    }
 
     // Sucursales donde realmente hay stock de algo que se encontró, para
     // mostrar un botón directo de WhatsApp (sin exponer las que no tienen nada).
@@ -329,6 +371,7 @@ export async function POST(req: NextRequest) {
       reply,
       productos: productosParaMostrar,
       contactos: Array.from(contactosPorBodega.values()),
+      catalogoUrl,
     })
   } catch {
     return NextResponse.json({ error: 'No se pudo conectar con el asistente' }, { status: 500 })

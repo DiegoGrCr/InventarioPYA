@@ -9,7 +9,7 @@ import Pagination from '@/components/products/Pagination'
 
 const PAGE_SIZE = 20
 
-export default async function PisosPage({ searchParams }: { searchParams: Promise<{ material?: string; brand_id?: string; size_id?: string; search?: string; sort?: string; page?: string }> }) {
+export default async function PisosPage({ searchParams }: { searchParams: Promise<{ material?: string; brand_id?: string; size_id?: string; search?: string; color?: string; finish?: string; format?: string; sort?: string; page?: string }> }) {
   const params = await searchParams
   const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
@@ -17,6 +17,17 @@ export default async function PisosPage({ searchParams }: { searchParams: Promis
   const page = Math.max(1, parseInt(params.page || '1') || 1)
   const from = (page - 1) * PAGE_SIZE
   const to = from + PAGE_SIZE - 1
+
+  // "format" (cuadrado/rectangular) no es una columna directa — se resuelve
+  // comparando ancho y alto de cada medida (igual que en el asistente de IA,
+  // que genera enlaces a este catálogo con este mismo filtro).
+  let formatSizeIds: string[] | null = null
+  if (params.format === 'cuadrado' || params.format === 'rectangular') {
+    const { data: allSizes } = await supabase.from('sizes').select('id, width, height')
+    formatSizeIds = (allSizes || [])
+      .filter(s => params.format === 'cuadrado' ? s.width === s.height : s.width !== s.height)
+      .map(s => s.id)
+  }
 
   let query = supabase
     .from('products')
@@ -35,6 +46,9 @@ export default async function PisosPage({ searchParams }: { searchParams: Promis
   if (params.brand_id) query = query.eq('brand_id', params.brand_id)
   if (params.size_id) query = query.eq('size_id', params.size_id)
   if (params.search) query = query.ilike('name', `%${params.search}%`)
+  if (params.color) query = query.or(`color.ilike.%${params.color}%,description.ilike.%${params.color}%`)
+  if (params.finish) query = query.ilike('finish', `%${params.finish}%`)
+  if (formatSizeIds) query = formatSizeIds.length > 0 ? query.in('size_id', formatSizeIds) : query.eq('size_id', 'no-match')
 
   let countQuery = supabase
     .from('products')
@@ -45,6 +59,9 @@ export default async function PisosPage({ searchParams }: { searchParams: Promis
   if (params.brand_id) countQuery = countQuery.eq('brand_id', params.brand_id)
   if (params.size_id) countQuery = countQuery.eq('size_id', params.size_id)
   if (params.search) countQuery = countQuery.ilike('name', `%${params.search}%`)
+  if (params.color) countQuery = countQuery.or(`color.ilike.%${params.color}%,description.ilike.%${params.color}%`)
+  if (params.finish) countQuery = countQuery.ilike('finish', `%${params.finish}%`)
+  if (formatSizeIds) countQuery = formatSizeIds.length > 0 ? countQuery.in('size_id', formatSizeIds) : countQuery.eq('size_id', 'no-match')
 
   const [{ data: products }, { count }, { data: brands }, { data: sizes }] = await Promise.all([
     query,
