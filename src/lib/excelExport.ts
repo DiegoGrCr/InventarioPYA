@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import { groupByBrand, sortByFormatoThenName, groupConsecutiveByFormato, sanitizeTabName } from './inventoryGrouping'
 
 const COLORS = {
   titleBg: 'FF1E3A5F',
@@ -42,14 +43,7 @@ interface AccessoryRow {
 }
 
 function sanitizeSheetName(name: string, used: Set<string>) {
-  const base = name.replace(/[\\/?*[\]:]/g, '').trim().slice(0, 28) || 'Hoja'
-  let candidate = base
-  let n = 2
-  while (used.has(candidate.toLowerCase())) {
-    candidate = `${base} (${n++})`
-  }
-  used.add(candidate.toLowerCase())
-  return candidate
+  return sanitizeTabName(name, used, 28)
 }
 
 function autoFitColumns(sheet: ExcelJS.Worksheet, colCount: number) {
@@ -105,15 +99,10 @@ function buildBrandSheet(workbook: ExcelJS.Workbook, brandLabel: string, items: 
   sheet.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: COLS } }
 
   let rowIdx = 3
-  let i = 0
-  while (i < items.length) {
-    const formato = items[i].formato
-    let j = i
-    while (j < items.length && items[j].formato === formato) j++
+  groupConsecutiveByFormato(items).forEach(({ formato, items: group }) => {
     const groupStartRow = rowIdx
 
-    for (let k = i; k < j; k++) {
-      const it = items[k]
+    group.forEach(it => {
       const row = sheet.getRow(rowIdx)
       row.getCell(1).value = formato
       row.getCell(2).value = it.name
@@ -138,11 +127,10 @@ function buildBrandSheet(workbook: ExcelJS.Workbook, brandLabel: string, items: 
         if (isZero && c !== 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.zeroBg } }
       }
       rowIdx++
-    }
+    })
 
     if (rowIdx - 1 > groupStartRow) sheet.mergeCells(groupStartRow, 1, rowIdx - 1, 1)
-    i = j
-  }
+  })
 
   if (items.length === 0) {
     sheet.getRow(3).getCell(2).value = 'Sin resultados'
@@ -190,18 +178,13 @@ export async function buildInventoryWorkbook({
   const usedNames = new Set<string>()
   const updatedAt = timestamp()
 
-  const byBrand = new Map<string, PisoItem[]>()
-  items.forEach(it => {
-    if (!byBrand.has(it.brand)) byBrand.set(it.brand, [])
-    byBrand.get(it.brand)!.push(it)
-  })
-
+  const byBrand = groupByBrand(items)
   const brandNames = Array.from(byBrand.keys()).sort((a, b) => a.localeCompare(b))
   if (brandNames.length === 0) {
     buildBrandSheet(workbook, 'Sin resultados', [], usedNames, updatedAt)
   } else {
     brandNames.forEach(brandName => {
-      const list = byBrand.get(brandName)!.sort((a, b) => a.area - b.area || a.name.localeCompare(b.name))
+      const list = sortByFormatoThenName(byBrand.get(brandName)!)
       buildBrandSheet(workbook, brandName, list, usedNames, updatedAt)
     })
   }
