@@ -358,6 +358,32 @@ export interface SyncSummary {
   durationMs: number
   bodegas: BodegaResult[]
   conflicts: { productId: string; field: 'name' | 'price' }[]
+  skipped?: boolean
+}
+
+// Evita que dos corridas se solapen (ej. un reintento del disparador externo,
+// o que Vercel invoque la función más de una vez casi al mismo tiempo) — sin
+// esto, dos corridas simultáneas pueden leer la hoja en momentos distintos y
+// terminan reconstruyendo pestañas en bucle una contra la otra. Si el lock se
+// quedó pegado por una corrida que nunca lo liberó (crash), se considera
+// libre después de 5 minutos.
+const LOCK_STALE_MS = 5 * 60 * 1000
+
+async function acquireLock(supabase: ReturnType<typeof createPlainSupabaseClient>): Promise<boolean> {
+  const now = new Date()
+  const staleThreshold = new Date(now.getTime() - LOCK_STALE_MS).toISOString()
+  const { data, error } = await supabase
+    .from('sync_lock')
+    .update({ locked_at: now.toISOString() })
+    .eq('id', 1)
+    .or(`locked_at.is.null,locked_at.lt.${staleThreshold}`)
+    .select()
+  if (error) throw new Error(`Error al intentar tomar el lock de sync: ${error.message}`)
+  return (data?.length || 0) > 0
+}
+
+async function releaseLock(supabase: ReturnType<typeof createPlainSupabaseClient>) {
+  await supabase.from('sync_lock').update({ locked_at: null }).eq('id', 1)
 }
 
 export async function syncAllBodegas(): Promise<SyncSummary> {
@@ -370,25 +396,36 @@ export async function syncAllBodegas(): Promise<SyncSummary> {
     return summary
   }
 
-  const sheets = getSheetsClient()
   const supabase = createPlainSupabaseClient()
-  const bodegaNames = configs.map(c => c.bodega)
+  const gotLock = await acquireLock(supabase)
+  if (!gotLock) {
+    summary.skipped = true
+    summary.durationMs = Date.now() - startedAt
+    return summary
+  }
 
-  const masterBeforePulls = await fetchMasterData(supabase, bodegaNames)
-  const { pullMap, stockPushes, conflicts, sheetStates } = await pullPhase(sheets, configs, masterBeforePulls)
-  summary.conflicts = conflicts
+  try {
+    const sheets = getSheetsClient()
+    const bodegaNames = configs.map(c => c.bodega)
 
-  await applyPulls(supabase, masterBeforePulls, pullMap, stockPushes)
+    const masterBeforePulls = await fetchMasterData(supabase, bodegaNames)
+    const { pullMap, stockPushes, conflicts, sheetStates } = await pullPhase(sheets, configs, masterBeforePulls)
+    summary.conflicts = conflicts
 
-  const freshMaster = await fetchMasterData(supabase, bodegaNames)
+    await applyPulls(supabase, masterBeforePulls, pullMap, stockPushes)
 
-  for (const state of sheetStates) {
-    try {
-      const result = await reconcileBodega(sheets, state, freshMaster.get(state.config.bodega) || [])
-      summary.bodegas.push(result)
-    } catch (err) {
-      summary.bodegas.push({ bodega: state.config.bodega, rebuiltTabs: [], cellsWritten: 0, error: err instanceof Error ? err.message : String(err) })
+    const freshMaster = await fetchMasterData(supabase, bodegaNames)
+
+    for (const state of sheetStates) {
+      try {
+        const result = await reconcileBodega(sheets, state, freshMaster.get(state.config.bodega) || [])
+        summary.bodegas.push(result)
+      } catch (err) {
+        summary.bodegas.push({ bodega: state.config.bodega, rebuiltTabs: [], cellsWritten: 0, error: err instanceof Error ? err.message : String(err) })
+      }
     }
+  } finally {
+    await releaseLock(supabase)
   }
 
   summary.durationMs = Date.now() - startedAt
