@@ -4,6 +4,14 @@ import { syncAllBodegas } from '@/lib/sheetSync'
 // googleapis firma JWT con Node crypto — no corre en el runtime Edge.
 export const runtime = 'nodejs'
 export const maxDuration = 60
+// CRÍTICO: sin esto, Next.js puede cachear las llamadas fetch() que googleapis
+// hace por debajo hacia la API de Sheets (ya que esta ruta nunca usa cookies()/
+// headers() de next/headers, que son las que normalmente activan el modo
+// dinámico) — eso causaba que cada corrida en producción leyera una copia
+// vieja de la hoja y reconstruyera pestañas en un ciclo sin fin, aunque
+// localmente (sin el runtime de Next.js) siempre funcionara bien.
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
