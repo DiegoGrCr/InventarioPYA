@@ -422,7 +422,7 @@ async function assertBodegaMembership(supabase: ReturnType<typeof createPlainSup
 }
 
 export async function syncAllBodegas(options?: { allowStructural?: boolean }): Promise<SyncSummary> {
-  const allowStructural = options?.allowStructural ?? false
+  const allowStructural = options?.allowStructural ?? true
   const startedAt = Date.now()
   const configs = getConfiguredBodegas()
   const summary: SyncSummary = { ranAt: new Date().toISOString(), durationMs: 0, bodegas: [], conflicts: [] }
