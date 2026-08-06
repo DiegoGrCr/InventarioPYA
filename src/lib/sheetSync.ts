@@ -154,6 +154,7 @@ async function pullPhase(
   sheets: sheets_v4.Sheets,
   configs: BodegaConfig[],
   masterBefore: Map<string, MasterRow[]>,
+  invocationId: string,
 ): Promise<PullOutcome> {
   const pullMap = new Map<string, PullMapEntry>()
   const stockPushes: PullOutcome['stockPushes'] = []
@@ -169,6 +170,10 @@ async function pullPhase(
     // en cada corrida y la Fase B nunca podría eliminarla del todo.
     const validIds = new Set((masterBefore.get(config.bodega) || []).map(r => r.productId))
 
+    // Rastro permanente (barato) para poder detectar en los logs de Vercel si
+    // dos invocaciones llegan a solaparse — ver commit que quitó el cliente
+    // de Sheets cacheado a nivel de módulo para el porqué de esto.
+    console.log(`[sync ${invocationId}] listTabs bodega=${config.bodega} spreadsheetId=${config.spreadsheetId}`)
     const tabs = await listTabs(sheets, config.spreadsheetId)
     const rowsByTab = new Map<string, ParsedSheetRow[]>()
     if (tabs.length > 0) {
@@ -262,6 +267,7 @@ async function reconcileBodega(
   state: BodegaSheetState,
   freshRows: MasterRow[],
   allowStructural: boolean,
+  invocationId: string,
 ): Promise<BodegaResult> {
   const { config, tabs, rowsByTab } = state
   const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!
@@ -362,6 +368,7 @@ async function reconcileBodega(
     }
   }
 
+  console.log(`[sync ${invocationId}] write bodega=${config.bodega} spreadsheetId=${config.spreadsheetId} rebuiltTabs=${JSON.stringify(rebuiltTabs)} toClear=${JSON.stringify(toClear)} writes=${writes.length}`)
   await batchClearTabs(sheets, config.spreadsheetId, toClear)
   await applyStructuralRequests(sheets, config.spreadsheetId, structural)
   await batchWriteCells(sheets, config.spreadsheetId, writes)
@@ -421,8 +428,9 @@ async function assertBodegaMembership(supabase: ReturnType<typeof createPlainSup
   }
 }
 
-export async function syncAllBodegas(options?: { allowStructural?: boolean }): Promise<SyncSummary> {
+export async function syncAllBodegas(options?: { allowStructural?: boolean; invocationId?: string }): Promise<SyncSummary> {
   const allowStructural = options?.allowStructural ?? false
+  const invocationId = options?.invocationId ?? crypto.randomUUID()
   const startedAt = Date.now()
   const configs = getConfiguredBodegas()
   const summary: SyncSummary = { ranAt: new Date().toISOString(), durationMs: 0, bodegas: [], conflicts: [] }
@@ -445,7 +453,7 @@ export async function syncAllBodegas(options?: { allowStructural?: boolean }): P
     const bodegaNames = configs.map(c => c.bodega)
 
     const masterBeforePulls = await fetchMasterData(supabase, bodegaNames)
-    const { pullMap, stockPushes, conflicts, sheetStates } = await pullPhase(sheets, configs, masterBeforePulls)
+    const { pullMap, stockPushes, conflicts, sheetStates } = await pullPhase(sheets, configs, masterBeforePulls, invocationId)
     summary.conflicts = conflicts
 
     await applyPulls(supabase, masterBeforePulls, pullMap, stockPushes)
@@ -456,7 +464,7 @@ export async function syncAllBodegas(options?: { allowStructural?: boolean }): P
       try {
         const rowsForBodega = freshMaster.get(state.config.bodega) || []
         await assertBodegaMembership(supabase, state.config.bodega, rowsForBodega)
-        const result = await reconcileBodega(sheets, state, rowsForBodega, allowStructural)
+        const result = await reconcileBodega(sheets, state, rowsForBodega, allowStructural, invocationId)
         summary.bodegas.push(result)
       } catch (err) {
         summary.bodegas.push({ bodega: state.config.bodega, rebuiltTabs: [], cellsWritten: 0, error: err instanceof Error ? err.message : String(err) })

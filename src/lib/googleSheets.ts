@@ -32,11 +32,18 @@ function getAuth() {
   return new google.auth.JWT({ email, key: rawKey.replace(/\\n/g, '\n'), scopes: SCOPES })
 }
 
-let cachedClient: sheets_v4.Sheets | null = null
-
+// Deliberadamente SIN cachear a nivel de módulo. En una función serverless de
+// Vercel, una variable a nivel de módulo puede sobrevivir y compartirse entre
+// invocaciones distintas de un mismo contenedor "caliente" (más aún con Fluid
+// Compute, donde varias invocaciones concurrentes literalmente comparten el
+// mismo scope de módulo) — eso incluye el cliente HTTP subyacente y su pool de
+// conexiones. Ese fue el sospechoso principal de que, en producción (nunca en
+// pruebas locales, donde un proceso nunca tiene una "segunda vida"), contenido
+// de una bodega apareciera escrito en el archivo de otra. Crear el cliente
+// fresco en cada llamada cuesta poco (no hace una llamada de red hasta el
+// primer uso real) y elimina ese vector por completo.
 export function getSheetsClient(): sheets_v4.Sheets {
-  if (!cachedClient) cachedClient = google.sheets({ version: 'v4', auth: getAuth() })
-  return cachedClient
+  return google.sheets({ version: 'v4', auth: getAuth() })
 }
 
 function quoteTitle(title: string) {

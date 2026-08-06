@@ -25,10 +25,11 @@ export async function GET(req: NextRequest) {
   // una bodega en el archivo de otra. Solo usar manualmente y verificar
   // después de cada corrida hasta encontrar la causa real.
   const allowStructural = req.nextUrl.searchParams.get('structural') === '1'
+  const invocationId = crypto.randomUUID()
 
   try {
-    const summary = await syncAllBodegas({ allowStructural })
-    return NextResponse.json(summary)
+    const summary = await syncAllBodegas({ allowStructural, invocationId })
+    return NextResponse.json({ invocationId, ...summary })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error desconocido' }, { status: 500 })
   }
