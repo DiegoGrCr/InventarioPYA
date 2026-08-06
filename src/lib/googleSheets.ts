@@ -128,9 +128,10 @@ export async function createMissingTabs(sheets: sheets_v4.Sheets, spreadsheetId:
   return map
 }
 
-// Protege FORMATO, PIEZAS X CAJA/M² X CAJA y las columnas ocultas de sync —
-// solo la cuenta de servicio (y el dueño del archivo, siempre implícito) puede
-// editarlas. DESCRIPCIÓN/CAJAS EN EXISTENCIA/PRECIO quedan libres para el personal.
+// Protege FORMATO, PIEZAS X CAJA/M² X CAJA, PRECIO y las columnas ocultas de
+// sync — solo la cuenta de servicio (y el dueño del archivo, siempre
+// implícito) puede editarlas. Solo DESCRIPCIÓN/CAJAS EN EXISTENCIA quedan
+// libres para el personal.
 export function buildProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
   return [
@@ -139,8 +140,15 @@ export function buildProtectionRequests(sheetId: number, serviceAccountEmail: st
       description: 'FORMATO - solo lectura', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
+      // C:D — PIEZAS X CAJA / M² X CAJA. OJO: no se puede fusionar con el
+      // rango de PRECIO (F) porque entre medio está CAJAS EN EXISTENCIA (E),
+      // que debe quedar editable — necesitan ser 2 rangos separados.
       range: { sheetId, startColumnIndex: COL.PIEZAS_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
       description: 'PIEZAS/M2 - solo lectura', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL.PRECIO, endColumnIndex: COL.PRECIO + 1 },
+      description: 'PRECIO - solo lectura', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startColumnIndex: COL.PRODUCT_ID, endColumnIndex: COL.LAST_SYNCED_PRICE + 1 },
