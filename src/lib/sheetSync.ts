@@ -89,7 +89,9 @@ interface ParsedSheetRow {
   rowIndex1: number // fila real (1-based) dentro de la pestaña, para direccionar celdas
   name: string
   price: number | null
+  priceInvalid: boolean // true si la celda tiene texto que no es un número (no vacía)
   stock: number
+  stockInvalid: boolean // true si la celda tiene texto que no es un número válido (>=0), incl. vacía/negativa
   trackedName: string
   trackedPrice: number | null
 }
@@ -122,12 +124,26 @@ function parseTabRows(rows: CellValue[][]): ParsedSheetRow[] {
     const r = rows[i]
     const productId = cellIdText(r[COL.PRODUCT_ID])
     if (!productId) continue
+
+    // Inválido = tiene contenido pero no es un número, o es un número negativo
+    // (precio/stock no pueden ser negativos). Vacío SÍ es válido (precio nulo /
+    // stock en 0) — eso es un valor intencional, no un error de captura.
+    const priceText = cellIdText(r[COL.PRECIO])
+    const priceNum = cellNum(r[COL.PRECIO])
+    const priceInvalid = (priceText !== '' && priceNum === null) || (priceNum !== null && priceNum < 0)
+
+    const stockText = cellIdText(r[COL.CAJAS_EN_EXISTENCIA])
+    const stockNum = cellNum(r[COL.CAJAS_EN_EXISTENCIA])
+    const stockInvalid = (stockText !== '' && stockNum === null) || (stockNum !== null && stockNum < 0)
+
     out.push({
       productId,
       rowIndex1: i + 1,
       name: cellRaw(r[COL.DESCRIPCION]),
-      price: cellNum(r[COL.PRECIO]),
-      stock: cellNum(r[COL.CAJAS_EN_EXISTENCIA]) ?? 0,
+      price: priceNum,
+      priceInvalid,
+      stock: stockInvalid ? 0 : (stockNum ?? 0),
+      stockInvalid,
       trackedName: cellRaw(r[COL.LAST_SYNCED_NAME]),
       trackedPrice: cellNum(r[COL.LAST_SYNCED_PRICE]),
     })
@@ -184,14 +200,19 @@ async function pullPhase(
         for (const row of rows) {
           if (!validIds.has(row.productId)) continue
 
-          stockPushes.push({ productId: row.productId, bodega: config.bodega, stock: row.stock })
+          // Un valor inválido (texto donde va un número, o negativo) NUNCA se
+          // aplica a la BDD — se ignora esta fila para ese campo, y la Fase B
+          // se encarga de corregir la celda de vuelta al valor real.
+          if (!row.stockInvalid) {
+            stockPushes.push({ productId: row.productId, bodega: config.bodega, stock: row.stock })
+          }
 
           if (row.name && row.name !== row.trackedName) {
             const existing = pullMap.get(row.productId)
             if (existing?.name !== undefined && existing.name !== row.name) conflicts.push({ productId: row.productId, field: 'name' })
             pullMap.set(row.productId, { ...existing, name: row.name })
           }
-          if (row.price !== row.trackedPrice) {
+          if (!row.priceInvalid && row.price !== row.trackedPrice) {
             const existing = pullMap.get(row.productId)
             if (existing?.price !== undefined && existing.price !== row.price) conflicts.push({ productId: row.productId, field: 'price' })
             pullMap.set(row.productId, { ...existing, price: row.price })
