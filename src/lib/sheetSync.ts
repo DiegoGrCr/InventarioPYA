@@ -386,6 +386,23 @@ async function releaseLock(supabase: ReturnType<typeof createPlainSupabaseClient
   await supabase.from('sync_lock').update({ locked_at: null }).eq('id', 1)
 }
 
+// Verificación de seguridad independiente antes de escribir cualquier cosa en
+// una hoja: vuelve a consultar product_bodega_stock desde cero, filtrado
+// estrictamente a ESTA bodega, y confirma que coincide exactamente con lo que
+// se está a punto de escribir. Si algo no cuadra (aunque sea por una causa que
+// no hayamos identificado), se aborta esa bodega en vez de escribir productos
+// de otra bodega/marca por accidente.
+async function assertBodegaMembership(supabase: ReturnType<typeof createPlainSupabaseClient>, bodega: string, rows: MasterRow[]) {
+  const { data, error } = await supabase.from('product_bodega_stock').select('product_id').eq('bodega', bodega)
+  if (error) throw new Error(`Verificación de seguridad falló (${bodega}): ${error.message}`)
+  const realIds = new Set((data || []).map(r => r.product_id))
+  const givenIds = rows.map(r => r.productId)
+  const extra = givenIds.filter(id => !realIds.has(id))
+  if (extra.length > 0) {
+    throw new Error(`Verificación de seguridad falló (${bodega}): ${extra.length} producto(s) no pertenecen realmente a esta bodega (ej. ${extra[0]}) — se aborta para no escribir datos incorrectos en la hoja.`)
+  }
+}
+
 export async function syncAllBodegas(): Promise<SyncSummary> {
   const startedAt = Date.now()
   const configs = getConfiguredBodegas()
@@ -418,7 +435,9 @@ export async function syncAllBodegas(): Promise<SyncSummary> {
 
     for (const state of sheetStates) {
       try {
-        const result = await reconcileBodega(sheets, state, freshMaster.get(state.config.bodega) || [])
+        const rowsForBodega = freshMaster.get(state.config.bodega) || []
+        await assertBodegaMembership(supabase, state.config.bodega, rowsForBodega)
+        const result = await reconcileBodega(sheets, state, rowsForBodega)
         summary.bodegas.push(result)
       } catch (err) {
         summary.bodegas.push({ bodega: state.config.bodega, rebuiltTabs: [], cellsWritten: 0, error: err instanceof Error ? err.message : String(err) })
