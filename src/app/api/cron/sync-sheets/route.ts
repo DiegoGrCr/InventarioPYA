@@ -19,12 +19,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // "structural=1" habilita crear pestañas nuevas / reconstruir pestañas
-  // completas — apagado por default: se confirmó un bug real (no solo
-  // propagación de despliegue) que hace que esto pueda escribir contenido de
-  // una bodega en el archivo de otra. Solo usar manualmente y verificar
-  // después de cada corrida hasta encontrar la causa real.
-  const allowStructural = req.nextUrl.searchParams.get('structural') === '1'
+  // "structural=0" desactiva crear pestañas nuevas / reconstruir pestañas
+  // completas — encendido por default. La causa real de que esto escribiera
+  // contenido de una bodega en el archivo de otra era GOOGLE_SHEET_ID_LA_PLAYITA
+  // mal capturada en Vercel (apuntaba al archivo de Arroyo) — no un bug de
+  // concurrencia. Ya corregido y verificado con una alta real de producto.
+  const allowStructural = req.nextUrl.searchParams.get('structural') !== '0'
   const invocationId = crypto.randomUUID()
 
   try {

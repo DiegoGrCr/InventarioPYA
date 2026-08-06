@@ -429,7 +429,7 @@ async function assertBodegaMembership(supabase: ReturnType<typeof createPlainSup
 }
 
 export async function syncAllBodegas(options?: { allowStructural?: boolean; invocationId?: string }): Promise<SyncSummary> {
-  const allowStructural = options?.allowStructural ?? false
+  const allowStructural = options?.allowStructural ?? true
   const invocationId = options?.invocationId ?? crypto.randomUUID()
   const startedAt = Date.now()
   const configs = getConfiguredBodegas()
