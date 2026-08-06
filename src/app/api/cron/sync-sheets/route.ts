@@ -19,10 +19,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // "structural=0" desactiva crear pestañas nuevas / reconstruir pestañas
-  // completas (para productos o marcas nuevas) — encendido por default;
-  // solo se apaga manualmente si hace falta investigar algo con calma.
-  const allowStructural = req.nextUrl.searchParams.get('structural') !== '0'
+  // "structural=1" habilita crear pestañas nuevas / reconstruir pestañas
+  // completas — apagado por default: se confirmó un bug real (no solo
+  // propagación de despliegue) que hace que esto pueda escribir contenido de
+  // una bodega en el archivo de otra. Solo usar manualmente y verificar
+  // después de cada corrida hasta encontrar la causa real.
+  const allowStructural = req.nextUrl.searchParams.get('structural') === '1'
 
   try {
     const summary = await syncAllBodegas({ allowStructural })
