@@ -19,8 +19,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // "structural=1" habilita crear pestañas nuevas / reconstruir pestañas
+  // completas (para productos o marcas nuevas) — apagado por default en el
+  // disparador automático, solo se usa manualmente cuando hace falta.
+  const allowStructural = req.nextUrl.searchParams.get('structural') === '1'
+
   try {
-    const summary = await syncAllBodegas()
+    const summary = await syncAllBodegas({ allowStructural })
     return NextResponse.json(summary)
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error desconocido' }, { status: 500 })

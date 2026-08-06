@@ -255,12 +255,13 @@ function buildMergeRequestsForGroups(sheetId: number, rows: MasterRow[]): sheets
   return requests
 }
 
-interface BodegaResult { bodega: string; rebuiltTabs: string[]; cellsWritten: number; error?: string }
+interface BodegaResult { bodega: string; rebuiltTabs: string[]; cellsWritten: number; error?: string; needsReview?: string[] }
 
 async function reconcileBodega(
   sheets: sheets_v4.Sheets,
   state: BodegaSheetState,
   freshRows: MasterRow[],
+  allowStructural: boolean,
 ): Promise<BodegaResult> {
   const { config, tabs, rowsByTab } = state
   const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!
@@ -274,9 +275,15 @@ async function reconcileBodega(
   const tabByTitle = new Map(tabs.map(t => [t.title, t]))
   const newTitles = brandNames.filter(b => !tabByTitle.has(titleByBrand.get(b)!)).map(b => titleByBrand.get(b)!)
 
-  const createdSheetIds = await createMissingTabs(sheets, config.spreadsheetId, newTitles)
+  // Crear pestañas nuevas y reconstruir pestañas completas son las únicas
+  // operaciones donde, ante un origen de datos incorrecto (por la razón que
+  // sea), se podría escribir contenido de OTRA bodega — así que quedan detrás
+  // de este interruptor, apagado por default en el cron automático. El sync
+  // normal (precio/stock/nombre en pestañas que ya coinciden) siempre corre.
+  const createdSheetIds = allowStructural ? await createMissingTabs(sheets, config.spreadsheetId, newTitles) : new Map<string, number>()
 
   const rebuiltTabs: string[] = []
+  const needsReview: string[] = []
   const toClear: string[] = []
   const structural: sheets_v4.Schema$Request[] = []
   const writes: { range: string; values: (string | number)[][] }[] = []
@@ -285,14 +292,25 @@ async function reconcileBodega(
     const title = titleByBrand.get(brand)!
     const desired = byBrand.get(brand)!
     const existingTab = tabByTitle.get(title)
-    const sheetId = existingTab?.sheetId ?? createdSheetIds.get(title)
-    if (sheetId == null) continue // no debería pasar, pero por seguridad de tipos
     const isNewTab = !existingTab
+    const sheetId = existingTab?.sheetId ?? createdSheetIds.get(title)
+
+    if (sheetId == null) {
+      // allowStructural=false y esta marca no tiene pestaña todavía — se
+      // reporta para revisión manual en vez de crearla sola.
+      if (isNewTab) needsReview.push(title)
+      continue
+    }
 
     const actualRows = isNewTab ? [] : (rowsByTab.get(title) || [])
     const desiredIds = new Set(desired.map(r => r.productId))
     const actualIds = new Set(actualRows.map(r => r.productId))
     const structurallyDifferent = isNewTab || desiredIds.size !== actualIds.size || [...desiredIds].some(id => !actualIds.has(id))
+
+    if (structurallyDifferent && !allowStructural) {
+      needsReview.push(title)
+      continue
+    }
 
     if (isNewTab) {
       structural.push(...buildProtectionRequests(sheetId, serviceAccountEmail))
@@ -348,7 +366,7 @@ async function reconcileBodega(
   await applyStructuralRequests(sheets, config.spreadsheetId, structural)
   await batchWriteCells(sheets, config.spreadsheetId, writes)
 
-  return { bodega: config.bodega, rebuiltTabs, cellsWritten: writes.length }
+  return { bodega: config.bodega, rebuiltTabs, cellsWritten: writes.length, needsReview: needsReview.length > 0 ? needsReview : undefined }
 }
 
 // -------- Orquestación --------
@@ -403,7 +421,8 @@ async function assertBodegaMembership(supabase: ReturnType<typeof createPlainSup
   }
 }
 
-export async function syncAllBodegas(): Promise<SyncSummary> {
+export async function syncAllBodegas(options?: { allowStructural?: boolean }): Promise<SyncSummary> {
+  const allowStructural = options?.allowStructural ?? false
   const startedAt = Date.now()
   const configs = getConfiguredBodegas()
   const summary: SyncSummary = { ranAt: new Date().toISOString(), durationMs: 0, bodegas: [], conflicts: [] }
@@ -437,7 +456,7 @@ export async function syncAllBodegas(): Promise<SyncSummary> {
       try {
         const rowsForBodega = freshMaster.get(state.config.bodega) || []
         await assertBodegaMembership(supabase, state.config.bodega, rowsForBodega)
-        const result = await reconcileBodega(sheets, state, rowsForBodega)
+        const result = await reconcileBodega(sheets, state, rowsForBodega, allowStructural)
         summary.bodegas.push(result)
       } catch (err) {
         summary.bodegas.push({ bodega: state.config.bodega, rebuiltTabs: [], cellsWritten: 0, error: err instanceof Error ? err.message : String(err) })
