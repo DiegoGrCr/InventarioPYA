@@ -303,3 +303,121 @@ export function buildRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$
     ...buildColumnWidthRequests(sheetId),
   ]
 }
+
+// ==================== Adhesivos (pestaña plana, sin agrupar por marca) ====================
+// Layout propio y más simple que el de Pisos (COL/HEADERS arriba) — sin
+// FORMATO/PIEZAS/M², que no aplican a adhesivos/boquillas. Coincide con el
+// nivel de detalle que ya usa el export a Excel de "Adhesivos".
+
+export const COL_ACC = {
+  CATEGORIA: 0,
+  DESCRIPCION: 1,
+  CANTIDAD: 2,
+  PRECIO: 3,
+  ACCESSORY_ID: 4,
+  LAST_SYNCED_NAME: 5,
+  LAST_SYNCED_PRICE: 6,
+} as const
+
+export const HEADERS_ACC = [
+  'CATEGORÍA', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO',
+  '_accessory_id', '_last_synced_name', '_last_synced_price',
+]
+
+export const ACCESSORY_TAB_NAME = 'Adhesivos'
+
+// Gemelo de rowRange() para el layout de Adhesivos — rowRange() hardcodea la
+// columna final en COL.LAST_SYNCED_PRICE (propia de Pisos, columna I).
+export function rowRangeAcc(title: string, startRow1: number, endRow1: number): string {
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_ACC.LAST_SYNCED_PRICE)}${endRow1}`
+}
+
+const VISIBLE_COLS_ACC = { startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.PRECIO + 1 }
+
+// Protege CATEGORÍA y PRECIO — solo DESCRIPCIÓN/CANTIDAD quedan libres para
+// el personal (mismo criterio que Pisos: precio protegido, nombre+cantidad
+// editables).
+export function buildAccessoryProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
+  const editors = { users: [serviceAccountEmail] }
+  return [
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.CATEGORIA + 1 },
+      description: 'CATEGORÍA - solo lectura', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_ACC.PRECIO, endColumnIndex: COL_ACC.PRECIO + 1 },
+      description: 'PRECIO - solo lectura', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_ACC.ACCESSORY_ID, endColumnIndex: COL_ACC.LAST_SYNCED_PRICE + 1 },
+      description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
+    } } },
+  ]
+}
+
+export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { updateDimensionProperties: {
+    range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.ACCESSORY_ID, endIndex: COL_ACC.LAST_SYNCED_PRICE + 1 },
+    properties: { hiddenByUser: true },
+    fields: 'hiddenByUser',
+  } }
+}
+
+export function buildAccessoryZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { addConditionalFormatRule: {
+    rule: {
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_ACC }],
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"";$${colLetter(COL_ACC.CANTIDAD)}2=0)` }] },
+        format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
+      },
+    },
+    index: 0,
+  } }
+}
+
+export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$Request[] {
+  const style = { style: 'SOLID' as const, color: hexToRgb(COLORS.border) }
+  return [
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, ...VISIBLE_COLS_ACC },
+      cell: { userEnteredFormat: {
+        backgroundColor: hexToRgb(COLORS.headerBg),
+        textFormat: { bold: true, foregroundColor: hexToRgb(COLORS.headerText) },
+        horizontalAlignment: 'CENTER',
+        verticalAlignment: 'MIDDLE',
+      } },
+      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.PRECIO, endColumnIndex: COL_ACC.PRECIO + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '"$"#,##0.00' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { updateBorders: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_ACC },
+      top: style, bottom: style, left: style, right: style, innerHorizontal: style, innerVertical: style,
+    } },
+    { setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_ACC } } } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.CATEGORIA, endIndex: COL_ACC.CATEGORIA + 1 },
+      properties: { pixelSize: 110 },
+      fields: 'pixelSize',
+    } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.DESCRIPCION, endIndex: COL_ACC.DESCRIPCION + 1 },
+      properties: { pixelSize: 240 },
+      fields: 'pixelSize',
+    } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.CANTIDAD, endIndex: COL_ACC.CANTIDAD + 1 },
+      properties: { pixelSize: 130 },
+      fields: 'pixelSize',
+    } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.PRECIO, endIndex: COL_ACC.PRECIO + 1 },
+      properties: { pixelSize: 100 },
+      fields: 'pixelSize',
+    } },
+  ]
+}

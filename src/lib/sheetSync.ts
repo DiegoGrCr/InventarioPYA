@@ -9,6 +9,7 @@ import {
   buildRepeatableStyleRequests, buildZeroStockHighlightRequest,
   COL, HEADERS, TabInfo, CellValue,
 } from './googleSheets'
+import { syncAccessoriesForBodegas, AccessoryBodegaResult } from './accessorySheetSync'
 
 // -------- Configuración de bodegas (qué archivos de Sheets están activos) --------
 
@@ -403,6 +404,7 @@ export interface SyncSummary {
   ranAt: string
   durationMs: number
   bodegas: BodegaResult[]
+  accessoryBodegas: AccessoryBodegaResult[]
   conflicts: { productId: string; field: 'name' | 'price' }[]
   skipped?: boolean
 }
@@ -454,7 +456,7 @@ export async function syncAllBodegas(options?: { allowStructural?: boolean; invo
   const invocationId = options?.invocationId ?? crypto.randomUUID()
   const startedAt = Date.now()
   const configs = getConfiguredBodegas()
-  const summary: SyncSummary = { ranAt: new Date().toISOString(), durationMs: 0, bodegas: [], conflicts: [] }
+  const summary: SyncSummary = { ranAt: new Date().toISOString(), durationMs: 0, bodegas: [], accessoryBodegas: [], conflicts: [] }
 
   if (configs.length === 0) {
     summary.durationMs = Date.now() - startedAt
@@ -491,6 +493,10 @@ export async function syncAllBodegas(options?: { allowStructural?: boolean; invo
         summary.bodegas.push({ bodega: state.config.bodega, rebuiltTabs: [], cellsWritten: 0, error: err instanceof Error ? err.message : String(err) })
       }
     }
+
+    // Misma bodega/candado/invocación — los adhesivos van como una pestaña
+    // más dentro del mismo archivo por bodega, no un archivo aparte.
+    summary.accessoryBodegas = await syncAccessoriesForBodegas(sheets, supabase, configs, allowStructural, invocationId)
   } finally {
     await releaseLock(supabase)
   }
