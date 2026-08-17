@@ -9,9 +9,10 @@ import { Camera, Loader2, Save, CheckCircle } from 'lucide-react'
 
 interface AccessoryFormProps {
   accessory?: Accessory
+  bodegaStock?: { bodega: string; stock: number }[]
 }
 
-export default function AccessoryForm({ accessory }: AccessoryFormProps) {
+export default function AccessoryForm({ accessory, bodegaStock = [] }: AccessoryFormProps) {
   const router = useRouter()
   const formRef = useRef<HTMLFormElement>(null)
   const [loading, setLoading] = useState(false)
@@ -21,6 +22,15 @@ export default function AccessoryForm({ accessory }: AccessoryFormProps) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [category, setCategory] = useState(accessory?.category || 'adhesivo')
+
+  const initialBodegaMap = Object.fromEntries(bodegaStock.map(b => [b.bodega, b.stock]))
+  const [bodegaEnabled, setBodegaEnabled] = useState<Record<string, boolean>>(
+    Object.fromEntries(WAREHOUSES.map(w => [w, w in initialBodegaMap]))
+  )
+  const [bodegaQty, setBodegaQty] = useState<Record<string, string>>(
+    Object.fromEntries(WAREHOUSES.map(w => [w, initialBodegaMap[w]?.toString() || '']))
+  )
+  const totalStock = WAREHOUSES.reduce((sum, w) => sum + (bodegaEnabled[w] ? parseInt(bodegaQty[w]) || 0 : 0), 0)
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -164,7 +174,7 @@ export default function AccessoryForm({ accessory }: AccessoryFormProps) {
         </div>
       </div>
 
-      <div className="form-row-3">
+      <div className="form-row">
         <div className="form-group">
           <label className="form-label">Peso</label>
           <input
@@ -185,16 +195,6 @@ export default function AccessoryForm({ accessory }: AccessoryFormProps) {
             placeholder="Blanco"
           />
         </div>
-        <div className="form-group">
-          <label className="form-label">Stock</label>
-          <input
-            type="number"
-            name="stock"
-            className="form-input"
-            min="0"
-            defaultValue={accessory?.stock ?? 0}
-          />
-        </div>
       </div>
 
       <div className="form-group">
@@ -211,14 +211,38 @@ export default function AccessoryForm({ accessory }: AccessoryFormProps) {
       </div>
 
       <div className="form-group">
-        <label className="form-label">Bodega(s)</label>
-        <div className="checkbox-group">
+        <label className="form-label">Stock por bodega</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {WAREHOUSES.map(w => (
-            <label key={w} className="checkbox-pill">
-              <input type="checkbox" name="bodegas" value={w} defaultChecked={accessory?.bodegas?.includes(w) || false} />
-              {w}
-            </label>
+            <div key={w} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label className="checkbox-pill" style={{ minWidth: '180px' }}>
+                <input
+                  type="checkbox"
+                  checked={bodegaEnabled[w]}
+                  onChange={e => setBodegaEnabled(prev => ({ ...prev, [w]: e.target.checked }))}
+                />
+                {w}
+              </label>
+              {bodegaEnabled[w] && (
+                <>
+                  <input type="hidden" name="bodega_nombre" value={w} />
+                  <input
+                    type="number"
+                    name="bodega_stock"
+                    className="form-input"
+                    min="0"
+                    style={{ maxWidth: '120px' }}
+                    placeholder="Cantidad"
+                    value={bodegaQty[w]}
+                    onChange={e => setBodegaQty(prev => ({ ...prev, [w]: e.target.value }))}
+                  />
+                </>
+              )}
+            </div>
           ))}
+        </div>
+        <div className="form-hint" style={{ marginTop: '8px' }}>
+          Stock total: <strong style={{ color: 'var(--text)' }}>{totalStock} unidades</strong>
         </div>
       </div>
 

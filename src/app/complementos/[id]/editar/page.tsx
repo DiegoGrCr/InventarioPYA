@@ -10,11 +10,10 @@ export default async function EditarAccesorioPage({ params }: { params: Promise<
 
   const supabase = await createServerSupabaseClient()
 
-  const { data: accessory } = await supabase
-    .from('accessories')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const [{ data: accessory }, { data: bodegaStock }] = await Promise.all([
+    supabase.from('accessories').select('*').eq('id', id).single(),
+    supabase.from('accessory_bodega_stock').select('bodega, stock').eq('accessory_id', id).order('bodega'),
+  ])
 
   if (!accessory) notFound()
 
@@ -29,7 +28,7 @@ export default async function EditarAccesorioPage({ params }: { params: Promise<
           </div>
         </div>
       </div>
-      <AccessoryForm accessory={accessory} />
+      <AccessoryForm accessory={accessory} bodegaStock={bodegaStock || []} />
     </div>
   )
 }

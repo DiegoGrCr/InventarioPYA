@@ -3,7 +3,7 @@
 import { useState, Fragment } from 'react'
 import { updateProductsPriceBulk, adjustProductBodegaStock } from '@/actions/products'
 import { updateBanoStock } from '@/actions/banos'
-import { updateAccessoryStock } from '@/actions/accessories'
+import { adjustAccessoryBodegaStock } from '@/actions/accessories'
 import { getStockStatus } from '@/lib/utils'
 import { WAREHOUSES } from '@/lib/types'
 import { Layers, Toilet, Package, FileSpreadsheet, Loader2, Tag, ChevronRight, ChevronDown } from 'lucide-react'
@@ -42,11 +42,12 @@ interface InventoryTableProps {
   brands: Array<{ id: string; name: string }>
   sizes: Array<{ id: string; label: string; width: number; height: number }>
   bodegaStockByProduct: Record<string, BodegaRow[]>
+  bodegaStockByAccessory: Record<string, BodegaRow[]>
 }
 
 const fmtBodegas = (bodegas: string[] | null) => (bodegas && bodegas.length > 0 ? bodegas.join(', ') : '')
 
-export default function InventoryTable({ products, banos, accessories, brands, sizes, bodegaStockByProduct }: InventoryTableProps) {
+export default function InventoryTable({ products, banos, accessories, brands, sizes, bodegaStockByProduct, bodegaStockByAccessory }: InventoryTableProps) {
   const [tab, setTab] = useState<'pisos' | 'banos' | 'accesorios'>('pisos')
   const [stocks, setStocks] = useState<Record<string, number>>(() => {
     const map: Record<string, number> = {}
@@ -56,6 +57,7 @@ export default function InventoryTable({ products, banos, accessories, brands, s
     return map
   })
   const [bodegaMap, setBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByProduct)
+  const [accessoryBodegaMap, setAccessoryBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByAccessory)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState<string | null>(null)
   const [exportScope, setExportScope] = useState<ExportScope>('all')
@@ -143,12 +145,11 @@ export default function InventoryTable({ products, banos, accessories, brands, s
     setBulkPrice('')
   }
 
-  const updateStock = async (id: string, newStock: number, type: 'bano' | 'accessory') => {
+  const updateStock = async (id: string, newStock: number) => {
     if (newStock < 0) return
     setStocks(prev => ({ ...prev, [id]: newStock }))
     setSaving(id)
-    if (type === 'bano') await updateBanoStock(id, newStock)
-    else await updateAccessoryStock(id, newStock)
+    await updateBanoStock(id, newStock)
     setSaving(null)
   }
 
@@ -162,6 +163,19 @@ export default function InventoryTable({ products, banos, accessories, brands, s
     setSaving(savingKey)
     const res = await adjustProductBodegaStock(productId, bodega, newStock)
     if (res.total !== undefined) setStocks(prev => ({ ...prev, [productId]: res.total! }))
+    setSaving(null)
+  }
+
+  const adjustAccessoryBodega = async (accessoryId: string, bodega: string, newStock: number) => {
+    if (newStock < 0) return
+    const savingKey = `acc:${accessoryId}:${bodega}`
+    setAccessoryBodegaMap(prev => ({
+      ...prev,
+      [accessoryId]: (prev[accessoryId] || []).map(r => (r.bodega === bodega ? { ...r, stock: newStock } : r)),
+    }))
+    setSaving(savingKey)
+    const res = await adjustAccessoryBodegaStock(accessoryId, bodega, newStock)
+    if (res.total !== undefined) setStocks(prev => ({ ...prev, [accessoryId]: res.total! }))
     setSaving(null)
   }
 
@@ -214,13 +228,20 @@ export default function InventoryTable({ products, banos, accessories, brands, s
         ? banos.filter(b => (b.bodegas || []).includes(selectedBodega))
         : banos
       const scopedAccessories = exportScope === 'bodega' && selectedBodega
-        ? accessories.filter(a => (a.bodegas || []).includes(selectedBodega))
+        ? accessories.filter(a => (accessoryBodegaMap[a.id] || []).some(r => r.bodega === selectedBodega))
         : accessories
 
       const workbook = await buildInventoryWorkbook({
         items,
         banos: scopedBanos.map(b => ({ name: b.name, brand: b.brand, model: b.model, color: b.color, bodega: fmtBodegas(b.bodegas), stock: stocks[b.id], price: b.price })),
-        accessories: scopedAccessories.map(a => ({ name: a.name, category: a.category, bodega: fmtBodegas(a.bodegas), stock: stocks[a.id] })),
+        accessories: scopedAccessories.map(a => {
+          const rows = accessoryBodegaMap[a.id] || []
+          if (exportScope === 'bodega' && selectedBodega) {
+            const row = rows.find(r => r.bodega === selectedBodega)
+            return { name: a.name, category: a.category, bodega: selectedBodega, stock: row?.stock ?? 0 }
+          }
+          return { name: a.name, category: a.category, bodega: rows.map(r => r.bodega).join(', '), stock: stocks[a.id] }
+        }),
       })
 
       let filename = 'inventario_general.xlsx'
@@ -454,28 +475,60 @@ export default function InventoryTable({ products, banos, accessories, brands, s
                 <td><span className={`badge ${badgeForStock(stocks[b.id])}`}>{stocks[b.id]} piezas</span></td>
                 <td>
                   <div className="stock-control">
-                    <button className="stock-btn" onClick={() => updateStock(b.id, stocks[b.id] - 1, 'bano')} disabled={saving === b.id}>−</button>
+                    <button className="stock-btn" onClick={() => updateStock(b.id, stocks[b.id] - 1)} disabled={saving === b.id}>−</button>
                     <span className="stock-value" style={{ opacity: saving === b.id ? 0.5 : 1 }}>{stocks[b.id]}</span>
-                    <button className="stock-btn" onClick={() => updateStock(b.id, stocks[b.id] + 1, 'bano')} disabled={saving === b.id}>+</button>
+                    <button className="stock-btn" onClick={() => updateStock(b.id, stocks[b.id] + 1)} disabled={saving === b.id}>+</button>
                   </div>
                 </td>
               </tr>
             ))}
-            {tab === 'accesorios' && accessories.map(a => (
-              <tr key={a.id}>
-                <td style={{ color: 'var(--text)', fontWeight: 500 }}>{a.name}</td>
-                <td><span className="badge badge-accent">{a.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla'}</span></td>
-                <td style={{ fontSize: '13px' }}>{fmtBodegas(a.bodegas) || '—'}</td>
-                <td><span className={`badge ${badgeForStock(stocks[a.id])}`}>{stocks[a.id]} unidades</span></td>
-                <td>
-                  <div className="stock-control">
-                    <button className="stock-btn" onClick={() => updateStock(a.id, stocks[a.id] - 1, 'accessory')} disabled={saving === a.id}>−</button>
-                    <span className="stock-value" style={{ opacity: saving === a.id ? 0.5 : 1 }}>{stocks[a.id]}</span>
-                    <button className="stock-btn" onClick={() => updateStock(a.id, stocks[a.id] + 1, 'accessory')} disabled={saving === a.id}>+</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {tab === 'accesorios' && accessories.map(a => {
+              const rows = accessoryBodegaMap[a.id] || []
+              const isExpanded = expanded.has(a.id)
+              return (
+                <Fragment key={a.id}>
+                  <tr>
+                    <td style={{ color: 'var(--text)', fontWeight: 500 }}>
+                      <button
+                        onClick={() => toggleExpanded(a.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'inherit', font: 'inherit', padding: 0 }}
+                      >
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        {a.name}
+                      </button>
+                    </td>
+                    <td><span className="badge badge-accent">{a.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla'}</span></td>
+                    <td style={{ fontSize: '13px' }}>{rows.map(r => r.bodega).join(', ') || '—'}</td>
+                    <td><span className={`badge ${badgeForStock(stocks[a.id])}`}>{stocks[a.id]} unidades</span></td>
+                    <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{stocks[a.id]}</td>
+                  </tr>
+                  {isExpanded && (
+                    rows.length > 0 ? rows.map(r => (
+                      <tr key={`${a.id}-${r.bodega}`} style={{ background: 'var(--bg)' }}>
+                        <td style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-secondary)' }}>↳ {r.bodega}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td>
+                          <div className="stock-control">
+                            <button className="stock-btn" onClick={() => adjustAccessoryBodega(a.id, r.bodega, r.stock - 1)} disabled={saving === `acc:${a.id}:${r.bodega}` || r.stock <= 0}>−</button>
+                            <span className="stock-value" style={{ opacity: saving === `acc:${a.id}:${r.bodega}` ? 0.5 : 1 }}>{r.stock}</span>
+                            <button className="stock-btn" onClick={() => adjustAccessoryBodega(a.id, r.bodega, r.stock + 1)} disabled={saving === `acc:${a.id}:${r.bodega}`}>+</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr style={{ background: 'var(--bg)' }}>
+                        <td></td>
+                        <td colSpan={4} style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                          Sin bodega asignada — edítalo desde &quot;Editar&quot;
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>

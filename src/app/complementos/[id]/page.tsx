@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { formatPrice, getStockStatus, getStockLabel, getCategoryLabel } from '@/lib/utils'
 import { Pencil, Droplets, PaintBucket } from 'lucide-react'
-import AccessoryStockControl from '@/components/accessories/AccessoryStockControl'
+import AccessoryBodegaStockControl from '@/components/accessories/AccessoryBodegaStockControl'
 import DeleteAccessoryBtn from '@/components/accessories/DeleteAccessoryBtn'
 import BackButton from '@/components/BackButton'
 import ShareButton from '@/components/ShareButton'
@@ -14,11 +14,10 @@ export default async function AccesorioDetailPage({ params }: { params: Promise<
   const isAdmin = await isAdminSession()
   const supabase = await createServerSupabaseClient()
 
-  const { data: acc } = await supabase
-    .from('accessories')
-    .select('*')
-    .eq('id', id)
-    .single()
+  const [{ data: acc }, { data: bodegaStock }] = await Promise.all([
+    supabase.from('accessories').select('*').eq('id', id).single(),
+    supabase.from('accessory_bodega_stock').select('bodega, stock').eq('accessory_id', id).order('bodega'),
+  ])
 
   if (!acc) notFound()
 
@@ -87,11 +86,11 @@ export default async function AccesorioDetailPage({ params }: { params: Promise<
                     <span style={{ fontSize: '14px' }}>{acc.color}</span>
                   </div>
                 )}
-                {acc.bodegas && acc.bodegas.length > 0 && (
+                {bodegaStock && bodegaStock.length > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Bodega</span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'flex-end' }}>
-                      {acc.bodegas.map((b: string) => <span key={b} className="badge badge-accent">{b}</span>)}
+                      {bodegaStock.map(b => <span key={b.bodega} className="badge badge-accent">{b.bodega}</span>)}
                     </div>
                   </div>
                 )}
@@ -112,7 +111,7 @@ export default async function AccesorioDetailPage({ params }: { params: Promise<
                   <span className={`badge ${badgeClass}`} style={{ marginRight: '8px' }}>{getStockLabel(acc.stock)}</span>
                   <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{acc.stock} bultos</span>
                 </div>
-                <AccessoryStockControl accessoryId={acc.id} initialStock={acc.stock} />
+                <AccessoryBodegaStockControl accessoryId={acc.id} initialStock={bodegaStock || []} />
               </div>
             </div>
           </div>
