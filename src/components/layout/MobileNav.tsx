@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Layers, Package, Calculator, Toilet } from 'lucide-react'
+import { LayoutDashboard, Layers, Package, Calculator, Toilet, Grid3x3 } from 'lucide-react'
 
 const mobileItems = [
   { label: 'Inicio',       href: '/',             icon: LayoutDashboard },
   { label: 'Pisos',        href: '/pisos',         icon: Layers },
+  { label: 'Mallas',       href: '/mallas',        icon: Grid3x3 },
   { label: 'Baños',        href: '/banos',         icon: Toilet },
   { label: 'Adhesivos',    href: '/complementos',  icon: Package },
   { label: 'Calculadora',  href: '/calculadora',   icon: Calculator },

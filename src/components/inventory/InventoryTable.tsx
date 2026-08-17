@@ -2,32 +2,35 @@
 
 import { useState, Fragment } from 'react'
 import { updateProductsPriceBulk, adjustProductBodegaStock } from '@/actions/products'
+import { updateMeshesPriceBulk, adjustMeshBodegaStock } from '@/actions/meshes'
 import { updateBanoStock } from '@/actions/banos'
 import { adjustAccessoryBodegaStock } from '@/actions/accessories'
 import { getStockStatus } from '@/lib/utils'
 import { WAREHOUSES } from '@/lib/types'
-import { Layers, Toilet, Package, FileSpreadsheet, Loader2, Tag, ChevronRight, ChevronDown } from 'lucide-react'
+import { Layers, Grid3x3, Toilet, Package, FileSpreadsheet, Loader2, Tag, ChevronRight, ChevronDown } from 'lucide-react'
 
 type ExportScope = 'all' | 'brand' | 'size' | 'bodega'
 type BodegaRow = { bodega: string; stock: number }
 
+interface CatalogItem {
+  id: string
+  name: string
+  stock: number
+  sku: string | null
+  brand_id: string | null
+  size_id: string | null
+  sale_unit: 'caja' | 'pieza'
+  price_per_sqm: number | null
+  price_per_box: number | null
+  sqm_per_box: number | null
+  pieces_per_box: number | null
+  brand: { name: string } | null
+  size: { label: string; width: number; height: number } | null
+}
+
 interface InventoryTableProps {
-  products: Array<{
-    id: string
-    name: string
-    stock: number
-    sku: string | null
-    material: string
-    brand_id: string | null
-    size_id: string | null
-    sale_unit: 'caja' | 'pieza'
-    price_per_sqm: number | null
-    price_per_box: number | null
-    sqm_per_box: number | null
-    pieces_per_box: number | null
-    brand: { name: string } | null
-    size: { label: string; width: number; height: number } | null
-  }>
+  products: Array<CatalogItem & { material: string }>
+  meshes: CatalogItem[]
   banos: Array<{
     id: string
     name: string
@@ -42,21 +45,24 @@ interface InventoryTableProps {
   brands: Array<{ id: string; name: string }>
   sizes: Array<{ id: string; label: string; width: number; height: number }>
   bodegaStockByProduct: Record<string, BodegaRow[]>
+  bodegaStockByMesh: Record<string, BodegaRow[]>
   bodegaStockByAccessory: Record<string, BodegaRow[]>
 }
 
 const fmtBodegas = (bodegas: string[] | null) => (bodegas && bodegas.length > 0 ? bodegas.join(', ') : '')
 
-export default function InventoryTable({ products, banos, accessories, brands, sizes, bodegaStockByProduct, bodegaStockByAccessory }: InventoryTableProps) {
-  const [tab, setTab] = useState<'pisos' | 'banos' | 'accesorios'>('pisos')
+export default function InventoryTable({ products, meshes, banos, accessories, brands, sizes, bodegaStockByProduct, bodegaStockByMesh, bodegaStockByAccessory }: InventoryTableProps) {
+  const [tab, setTab] = useState<'pisos' | 'mallas' | 'banos' | 'accesorios'>('pisos')
   const [stocks, setStocks] = useState<Record<string, number>>(() => {
     const map: Record<string, number> = {}
     products.forEach(p => { map[p.id] = p.stock })
+    meshes.forEach(m => { map[m.id] = m.stock })
     banos.forEach(b => { map[b.id] = b.stock })
     accessories.forEach(a => { map[a.id] = a.stock })
     return map
   })
   const [bodegaMap, setBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByProduct)
+  const [meshBodegaMap, setMeshBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByMesh)
   const [accessoryBodegaMap, setAccessoryBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByAccessory)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState<string | null>(null)
@@ -72,11 +78,23 @@ export default function InventoryTable({ products, banos, accessories, brands, s
   const [applyingBulk, setApplyingBulk] = useState(false)
   const [filterBrandId, setFilterBrandId] = useState('')
   const [filterSizeId, setFilterSizeId] = useState('')
+
+  const [selectedMeshIds, setSelectedMeshIds] = useState<Set<string>>(new Set())
+  const [bulkPriceMesh, setBulkPriceMesh] = useState('')
+  const [applyingBulkMesh, setApplyingBulkMesh] = useState(false)
+  const [filterBrandIdMesh, setFilterBrandIdMesh] = useState('')
+  const [filterSizeIdMesh, setFilterSizeIdMesh] = useState('')
+
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const filteredProducts = products.filter(p =>
     (!filterBrandId || p.brand_id === filterBrandId) &&
     (!filterSizeId || p.size_id === filterSizeId)
+  )
+
+  const filteredMeshes = meshes.filter(m =>
+    (!filterBrandIdMesh || m.brand_id === filterBrandIdMesh) &&
+    (!filterSizeIdMesh || m.size_id === filterSizeIdMesh)
   )
 
   const showFeedback = (type: 'success' | 'error', message: string) => {
@@ -86,6 +104,15 @@ export default function InventoryTable({ products, banos, accessories, brands, s
 
   const toggleSelected = (id: string) => {
     setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectedMesh = (id: string) => {
+    setSelectedMeshIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -103,6 +130,7 @@ export default function InventoryTable({ products, banos, accessories, brands, s
   }
 
   const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.has(p.id))
+  const allFilteredMeshesSelected = filteredMeshes.length > 0 && filteredMeshes.every(m => selectedMeshIds.has(m.id))
 
   const toggleSelectAllPisos = () => {
     setSelectedIds(prev => {
@@ -113,6 +141,19 @@ export default function InventoryTable({ products, banos, accessories, brands, s
       }
       const next = new Set(prev)
       filteredProducts.forEach(p => next.add(p.id))
+      return next
+    })
+  }
+
+  const toggleSelectAllMallas = () => {
+    setSelectedMeshIds(prev => {
+      if (allFilteredMeshesSelected) {
+        const next = new Set(prev)
+        filteredMeshes.forEach(m => next.delete(m.id))
+        return next
+      }
+      const next = new Set(prev)
+      filteredMeshes.forEach(m => next.add(m.id))
       return next
     })
   }
@@ -145,6 +186,34 @@ export default function InventoryTable({ products, banos, accessories, brands, s
     setBulkPrice('')
   }
 
+  const applyBulkPriceMesh = async () => {
+    const newPrice = parseFloat(bulkPriceMesh)
+    if (!newPrice || newPrice <= 0 || selectedMeshIds.size === 0) return
+
+    const targets = meshes.filter(m => selectedMeshIds.has(m.id))
+    if (!confirm(`¿Aplicar $${newPrice.toFixed(2)}/m² a ${targets.length} malla(s) seleccionada(s)?`)) return
+
+    setApplyingBulkMesh(true)
+    const res = await updateMeshesPriceBulk(
+      targets.map(m => ({ id: m.id, price_per_sqm: newPrice, sqm_per_box: m.sqm_per_box }))
+    )
+    setApplyingBulkMesh(false)
+
+    if (res.error) {
+      showFeedback('error', res.error)
+      return
+    }
+
+    setPriceOverrides(prev => {
+      const next = { ...prev }
+      targets.forEach(m => { next[m.id] = newPrice })
+      return next
+    })
+    showFeedback('success', `Precio actualizado en ${targets.length} malla(s)`)
+    setSelectedMeshIds(new Set())
+    setBulkPriceMesh('')
+  }
+
   const updateStock = async (id: string, newStock: number) => {
     if (newStock < 0) return
     setStocks(prev => ({ ...prev, [id]: newStock }))
@@ -163,6 +232,19 @@ export default function InventoryTable({ products, banos, accessories, brands, s
     setSaving(savingKey)
     const res = await adjustProductBodegaStock(productId, bodega, newStock)
     if (res.total !== undefined) setStocks(prev => ({ ...prev, [productId]: res.total! }))
+    setSaving(null)
+  }
+
+  const adjustMeshBodega = async (meshId: string, bodega: string, newStock: number) => {
+    if (newStock < 0) return
+    const savingKey = `mesh:${meshId}:${bodega}`
+    setMeshBodegaMap(prev => ({
+      ...prev,
+      [meshId]: (prev[meshId] || []).map(r => (r.bodega === bodega ? { ...r, stock: newStock } : r)),
+    }))
+    setSaving(savingKey)
+    const res = await adjustMeshBodegaStock(meshId, bodega, newStock)
+    if (res.total !== undefined) setStocks(prev => ({ ...prev, [meshId]: res.total! }))
     setSaving(null)
   }
 
@@ -190,11 +272,20 @@ export default function InventoryTable({ products, banos, accessories, brands, s
       const { buildInventoryWorkbook, downloadWorkbook } = await import('@/lib/excelExport')
 
       let scoped = products
-      if (exportScope === 'brand' && selectedBrandId) scoped = products.filter(p => p.brand_id === selectedBrandId)
-      else if (exportScope === 'size' && selectedSizeId) scoped = products.filter(p => p.size_id === selectedSizeId)
+      let scopedMeshes = meshes
+      if (exportScope === 'brand' && selectedBrandId) {
+        scoped = products.filter(p => p.brand_id === selectedBrandId)
+        scopedMeshes = meshes.filter(m => m.brand_id === selectedBrandId)
+      } else if (exportScope === 'size' && selectedSizeId) {
+        scoped = products.filter(p => p.size_id === selectedSizeId)
+        scopedMeshes = meshes.filter(m => m.size_id === selectedSizeId)
+      }
 
       type Item = { name: string; formato: string; area: number; piezas: number | null; m2: number | null; stock: number; precio: number | null; brand: string }
       let items: Item[] = []
+
+      type MeshItem = { name: string; brand: string; formato: string; piezas: number | null; m2: number | null; precio: number | null; bodega: string; stock: number }
+      let meshItems: MeshItem[] = []
 
       if (exportScope === 'bodega' && selectedBodega) {
         scoped.forEach(p => {
@@ -211,6 +302,20 @@ export default function InventoryTable({ products, banos, accessories, brands, s
             brand: p.brand?.name || 'Sin marca',
           })
         })
+        scopedMeshes.forEach(m => {
+          const row = (meshBodegaMap[m.id] || []).find(b => b.bodega === selectedBodega)
+          if (!row) return
+          meshItems.push({
+            name: m.name,
+            brand: m.brand?.name || 'Sin marca',
+            formato: m.size?.label || 'Sin medida',
+            piezas: m.sale_unit === 'pieza' ? null : m.pieces_per_box,
+            m2: m.sqm_per_box,
+            precio: m.price_per_sqm,
+            bodega: selectedBodega,
+            stock: row.stock,
+          })
+        })
       } else {
         items = scoped.map(p => ({
           name: p.name,
@@ -221,6 +326,16 @@ export default function InventoryTable({ products, banos, accessories, brands, s
           stock: stocks[p.id],
           precio: p.price_per_sqm,
           brand: p.brand?.name || 'Sin marca',
+        }))
+        meshItems = scopedMeshes.map(m => ({
+          name: m.name,
+          brand: m.brand?.name || 'Sin marca',
+          formato: m.size?.label || 'Sin medida',
+          piezas: m.sale_unit === 'pieza' ? null : m.pieces_per_box,
+          m2: m.sqm_per_box,
+          precio: m.price_per_sqm,
+          bodega: (meshBodegaMap[m.id] || []).map(r => r.bodega).join(', '),
+          stock: stocks[m.id],
         }))
       }
 
@@ -233,6 +348,7 @@ export default function InventoryTable({ products, banos, accessories, brands, s
 
       const workbook = await buildInventoryWorkbook({
         items,
+        meshes: meshItems,
         banos: scopedBanos.map(b => ({ name: b.name, brand: b.brand, model: b.model, color: b.color, bodega: fmtBodegas(b.bodegas), stock: stocks[b.id], price: b.price })),
         accessories: scopedAccessories.map(a => {
           const rows = accessoryBodegaMap[a.id] || []
@@ -266,7 +382,7 @@ export default function InventoryTable({ products, banos, accessories, brands, s
           value={exportScope}
           onChange={e => { setExportScope(e.target.value as ExportScope); setSelectedBrandId(''); setSelectedSizeId(''); setSelectedBodega('') }}
         >
-          <option value="all">Todos los pisos</option>
+          <option value="all">Todo el inventario</option>
           <option value="brand">Por marca</option>
           <option value="size">Por medida</option>
           <option value="bodega">Por bodega</option>
@@ -321,6 +437,7 @@ export default function InventoryTable({ products, banos, accessories, brands, s
 
       <div className="tabs">
         <button className={`tab ${tab === 'pisos' ? 'active' : ''}`} onClick={() => setTab('pisos')}><Layers size={15} /> Pisos ({products.length})</button>
+        <button className={`tab ${tab === 'mallas' ? 'active' : ''}`} onClick={() => setTab('mallas')}><Grid3x3 size={15} /> Mallas ({meshes.length})</button>
         <button className={`tab ${tab === 'banos' ? 'active' : ''}`} onClick={() => setTab('banos')}><Toilet size={15} /> Baños ({banos.length})</button>
         <button className={`tab ${tab === 'accesorios' ? 'active' : ''}`} onClick={() => setTab('accesorios')}><Package size={15} /> Adhesivos ({accessories.length})</button>
       </div>
@@ -355,6 +472,36 @@ export default function InventoryTable({ products, banos, accessories, brands, s
         </div>
       )}
 
+      {tab === 'mallas' && (
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Filtrar:</span>
+          <select
+            className="form-select"
+            style={{ fontSize: '13px', padding: '6px 10px', width: 'auto' }}
+            value={filterBrandIdMesh}
+            onChange={e => setFilterBrandIdMesh(e.target.value)}
+          >
+            <option value="">Todas las marcas</option>
+            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+          <select
+            className="form-select"
+            style={{ fontSize: '13px', padding: '6px 10px', width: 'auto' }}
+            value={filterSizeIdMesh}
+            onChange={e => setFilterSizeIdMesh(e.target.value)}
+          >
+            <option value="">Todas las medidas</option>
+            {sizes.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+          {(filterBrandIdMesh || filterSizeIdMesh) && (
+            <button className="btn btn-ghost" style={{ fontSize: '13px', padding: '6px 12px' }} onClick={() => { setFilterBrandIdMesh(''); setFilterSizeIdMesh('') }}>
+              Limpiar filtro
+            </button>
+          )}
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{filteredMeshes.length} malla(s)</span>
+        </div>
+      )}
+
       {tab === 'pisos' && selectedIds.size > 0 && (
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px', padding: '12px 16px', background: 'var(--primary-light)', borderRadius: 'var(--radius)', border: '1px solid rgba(99,102,241,0.3)' }}>
           <Tag size={16} style={{ color: 'var(--primary-hover)', flexShrink: 0 }} />
@@ -383,6 +530,34 @@ export default function InventoryTable({ products, banos, accessories, brands, s
         </div>
       )}
 
+      {tab === 'mallas' && selectedMeshIds.size > 0 && (
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px', padding: '12px 16px', background: 'var(--primary-light)', borderRadius: 'var(--radius)', border: '1px solid rgba(99,102,241,0.3)' }}>
+          <Tag size={16} style={{ color: 'var(--primary-hover)', flexShrink: 0 }} />
+          <span style={{ fontSize: '13px', fontWeight: 600 }}>{selectedMeshIds.size} seleccionada(s)</span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            className="form-input"
+            placeholder="Nuevo precio/m²"
+            style={{ width: '160px', padding: '6px 10px', fontSize: '13px' }}
+            value={bulkPriceMesh}
+            onChange={e => setBulkPriceMesh(e.target.value)}
+          />
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: '13px', padding: '6px 14px' }}
+            onClick={applyBulkPriceMesh}
+            disabled={applyingBulkMesh || !bulkPriceMesh || parseFloat(bulkPriceMesh) <= 0}
+          >
+            {applyingBulkMesh ? <><Loader2 size={14} className="spin" /> Aplicando...</> : 'Aplicar precio'}
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: '13px', padding: '6px 14px' }} onClick={() => setSelectedMeshIds(new Set())}>
+            Cancelar selección
+          </button>
+        </div>
+      )}
+
       <div className="table-container">
         <table className="table">
           <thead>
@@ -396,8 +571,17 @@ export default function InventoryTable({ products, banos, accessories, brands, s
                   />
                 </th>
               )}
+              {tab === 'mallas' && (
+                <th style={{ width: '32px' }}>
+                  <input
+                    type="checkbox"
+                    checked={allFilteredMeshesSelected}
+                    onChange={toggleSelectAllMallas}
+                  />
+                </th>
+              )}
               <th>Producto</th>
-              {tab === 'pisos' && <><th>Marca</th><th>Medida</th><th>Precio/m²</th></>}
+              {(tab === 'pisos' || tab === 'mallas') && <><th>Marca</th><th>Medida</th><th>Precio/m²</th></>}
               {tab === 'banos' && <><th>Marca</th><th>Modelo</th></>}
               {tab === 'accesorios' && <th>Categoría</th>}
               <th>Bodega</th>
@@ -445,7 +629,6 @@ export default function InventoryTable({ products, banos, accessories, brands, s
                         <td></td>
                         <td></td>
                         <td></td>
-                        <td></td>
                         <td>
                           <div className="stock-control">
                             <button className="stock-btn" onClick={() => adjustBodega(p.id, r.bodega, r.stock - 1)} disabled={saving === `${p.id}:${r.bodega}` || r.stock <= 0}>−</button>
@@ -459,6 +642,65 @@ export default function InventoryTable({ products, banos, accessories, brands, s
                         <td></td>
                         <td colSpan={7} style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-muted)' }}>
                           Sin bodega asignada — edítalo desde &quot;Editar Piso&quot;
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </Fragment>
+              )
+            })}
+            {tab === 'mallas' && filteredMeshes.map(m => {
+              const price = priceOverrides[m.id] ?? m.price_per_sqm
+              const rows = meshBodegaMap[m.id] || []
+              const isExpanded = expanded.has(m.id)
+              return (
+                <Fragment key={m.id}>
+                  <tr>
+                    <td>
+                      <input type="checkbox" checked={selectedMeshIds.has(m.id)} onChange={() => toggleSelectedMesh(m.id)} />
+                    </td>
+                    <td style={{ color: 'var(--text)', fontWeight: 500 }}>
+                      <button
+                        onClick={() => toggleExpanded(m.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'inherit', font: 'inherit', padding: 0 }}
+                      >
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        {m.name}
+                      </button>
+                    </td>
+                    <td>{m.brand?.name || '—'}</td>
+                    <td>{m.size?.label || '—'}</td>
+                    <td style={{ fontSize: '13px' }}>
+                      {price
+                        ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(price)
+                        : '—'}
+                    </td>
+                    <td style={{ fontSize: '13px' }}>{rows.map(r => r.bodega).join(', ') || '—'}</td>
+                    <td><span className={`badge ${badgeForStock(stocks[m.id])}`}>{stocks[m.id]} {m.sale_unit === 'pieza' ? 'piezas' : 'cajas'}</span></td>
+                    <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{stocks[m.id]}</td>
+                  </tr>
+                  {isExpanded && (
+                    rows.length > 0 ? rows.map(r => (
+                      <tr key={`${m.id}-${r.bodega}`} style={{ background: 'var(--bg)' }}>
+                        <td></td>
+                        <td style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-secondary)' }}>↳ {r.bodega}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td>
+                          <div className="stock-control">
+                            <button className="stock-btn" onClick={() => adjustMeshBodega(m.id, r.bodega, r.stock - 1)} disabled={saving === `mesh:${m.id}:${r.bodega}` || r.stock <= 0}>−</button>
+                            <span className="stock-value" style={{ opacity: saving === `mesh:${m.id}:${r.bodega}` ? 0.5 : 1 }}>{r.stock}</span>
+                            <button className="stock-btn" onClick={() => adjustMeshBodega(m.id, r.bodega, r.stock + 1)} disabled={saving === `mesh:${m.id}:${r.bodega}`}>+</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr style={{ background: 'var(--bg)' }}>
+                        <td></td>
+                        <td colSpan={7} style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                          Sin bodega asignada — edítala desde &quot;Editar Malla&quot;
                         </td>
                       </tr>
                     )

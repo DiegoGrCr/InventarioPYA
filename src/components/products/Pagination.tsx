@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 interface PaginationProps {
   page: number
   totalPages: number
+  basePath?: string
 }
 
 function getPageNumbers(page: number, totalPages: number): (number | '...')[] {
@@ -24,7 +25,7 @@ function getPageNumbers(page: number, totalPages: number): (number | '...')[] {
   return pages
 }
 
-export default function Pagination({ page, totalPages }: PaginationProps) {
+export default function Pagination({ page, totalPages, basePath = '/pisos' }: PaginationProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -34,7 +35,7 @@ export default function Pagination({ page, totalPages }: PaginationProps) {
     const params = new URLSearchParams(searchParams.toString())
     if (p <= 1) params.delete('page')
     else params.set('page', String(p))
-    router.push(`/pisos?${params.toString()}`)
+    router.push(`${basePath}?${params.toString()}`)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 

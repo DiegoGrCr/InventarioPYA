@@ -41,6 +41,30 @@ export interface Product {
   size?: Size
 }
 
+export interface Mesh {
+  id: string
+  name: string
+  description: string | null
+  brand_id: string | null
+  size_id: string | null
+  sku: string | null
+  image_url: string | null
+  finish: string | null
+  color: string | null
+  stock: number
+  sale_unit: 'caja' | 'pieza'
+  pieces_per_box: number | null
+  sqm_per_box: number | null
+  price_per_sqm: number | null
+  price_per_box: number | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  // Joined fields
+  brand?: Brand
+  size?: Size
+}
+
 export interface Accessory {
   id: string
   name: string

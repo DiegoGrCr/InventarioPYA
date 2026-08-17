@@ -42,6 +42,17 @@ interface AccessoryRow {
   stock: number
 }
 
+interface MeshRow {
+  name: string
+  brand: string
+  formato: string
+  piezas: number | null
+  m2: number | null
+  precio: number | null
+  bodega: string
+  stock: number
+}
+
 function sanitizeSheetName(name: string, used: Set<string>) {
   return sanitizeTabName(name, used, 28)
 }
@@ -167,10 +178,12 @@ function addSimpleSheet(workbook: ExcelJS.Workbook, name: string, headers: strin
 
 export async function buildInventoryWorkbook({
   items,
+  meshes,
   banos,
   accessories,
 }: {
   items: PisoItem[]
+  meshes: MeshRow[]
   banos: BanoRow[]
   accessories: AccessoryRow[]
 }) {
@@ -187,6 +200,16 @@ export async function buildInventoryWorkbook({
       const list = sortByFormatoThenName(byBrand.get(brandName)!)
       buildBrandSheet(workbook, brandName, list, usedNames, updatedAt)
     })
+  }
+
+  if (meshes.length > 0) {
+    addSimpleSheet(
+      workbook,
+      'Mallas',
+      ['Producto', 'Marca', 'Medida', 'Piezas/caja', 'm²/caja', 'Precio/m²', 'Bodega', 'Stock'],
+      meshes.map(m => [m.name, m.brand, m.formato, m.piezas ?? '', m.m2 ?? '', m.precio ?? '', m.bodega, m.stock]),
+      usedNames
+    )
   }
 
   if (banos.length > 0) {

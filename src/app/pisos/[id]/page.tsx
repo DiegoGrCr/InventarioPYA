@@ -166,7 +166,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               pricePerBox={product.price_per_box}
               sizeWidth={(product.size as any)?.width ?? null}
               sizeHeight={(product.size as any)?.height ?? null}
-              material={product.material}
             />
           )}
         </div>

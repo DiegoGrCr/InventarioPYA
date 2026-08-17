@@ -12,7 +12,6 @@ interface ProductCalculatorProps {
   pricePerBox: number | null
   sizeWidth: number | null   // cm
   sizeHeight: number | null  // cm
-  material: 'ceramica' | 'porcelana'
 }
 
 const WASTE_OPTIONS = [
@@ -37,7 +36,7 @@ function calcGroutKgPerSqm(widthCm: number, heightCm: number, jointMm: number): 
 
 export default function ProductCalculator({
   saleUnit, sqmPerBox, piecesPerBox, pricePerSqm, pricePerBox,
-  sizeWidth, sizeHeight, material,
+  sizeWidth, sizeHeight,
 }: ProductCalculatorProps) {
   const [metros, setMetros] = useState('')
   const [useWaste, setUseWaste] = useState(false)

@@ -8,10 +8,15 @@ export default async function InventarioPage() {
 
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: products }, { data: banos }, { data: accessories }, { data: brands }, { data: sizes }, { data: bodegaStockRows }, { data: accessoryBodegaStockRows }] = await Promise.all([
+  const [{ data: products }, { data: meshes }, { data: banos }, { data: accessories }, { data: brands }, { data: sizes }, { data: bodegaStockRows }, { data: meshBodegaStockRows }, { data: accessoryBodegaStockRows }] = await Promise.all([
     supabase
       .from('products')
       .select('id, name, stock, sku, material, brand_id, size_id, sale_unit, price_per_sqm, price_per_box, sqm_per_box, pieces_per_box, brand:brands(name), size:sizes(label, width, height)')
+      .eq('is_active', true)
+      .order('stock', { ascending: true }),
+    supabase
+      .from('meshes')
+      .select('id, name, stock, sku, brand_id, size_id, sale_unit, price_per_sqm, price_per_box, sqm_per_box, pieces_per_box, brand:brands(name), size:sizes(label, width, height)')
       .eq('is_active', true)
       .order('stock', { ascending: true }),
     supabase
@@ -27,6 +32,7 @@ export default async function InventarioPage() {
     supabase.from('brands').select('id, name').order('name'),
     supabase.from('sizes').select('id, label, width, height'),
     supabase.from('product_bodega_stock').select('product_id, bodega, stock'),
+    supabase.from('mesh_bodega_stock').select('mesh_id, bodega, stock'),
     supabase.from('accessory_bodega_stock').select('accessory_id, bodega, stock'),
   ])
 
@@ -36,6 +42,12 @@ export default async function InventarioPage() {
   ;(bodegaStockRows || []).forEach(r => {
     if (!bodegaStockByProduct[r.product_id]) bodegaStockByProduct[r.product_id] = []
     bodegaStockByProduct[r.product_id].push({ bodega: r.bodega, stock: r.stock })
+  })
+
+  const bodegaStockByMesh: Record<string, { bodega: string; stock: number }[]> = {}
+  ;(meshBodegaStockRows || []).forEach(r => {
+    if (!bodegaStockByMesh[r.mesh_id]) bodegaStockByMesh[r.mesh_id] = []
+    bodegaStockByMesh[r.mesh_id].push({ bodega: r.bodega, stock: r.stock })
   })
 
   const bodegaStockByAccessory: Record<string, { bodega: string; stock: number }[]> = {}
@@ -55,11 +67,13 @@ export default async function InventarioPage() {
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <InventoryTable
         products={(products || []) as any}
+        meshes={(meshes || []) as any}
         banos={(banos || []) as any}
         accessories={(accessories || []) as any}
         brands={(brands || []) as any}
         sizes={sortedSizes as any}
         bodegaStockByProduct={bodegaStockByProduct}
+        bodegaStockByMesh={bodegaStockByMesh}
         bodegaStockByAccessory={bodegaStockByAccessory}
       />
     </div>
