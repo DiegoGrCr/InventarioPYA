@@ -421,3 +421,125 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
     } },
   ]
 }
+
+// ==================== Mallas (pestaña plana, sin agrupar por marca) ====================
+// Mismos campos que Pisos (formato, piezas/caja, m²/caja, precio) salvo que
+// aquí no hay una pestaña por marca — como el catálogo de mallas es chico,
+// va todo en una sola pestaña plana (igual que Adhesivos), agregando una
+// columna MARCA visible ya que no hay pestaña que la reemplace.
+
+export const COL_MESH = {
+  MARCA: 0,
+  FORMATO: 1,
+  DESCRIPCION: 2,
+  PIEZAS_X_CAJA: 3,
+  M2_X_CAJA: 4,
+  CAJAS_EN_EXISTENCIA: 5,
+  PRECIO: 6,
+  MESH_ID: 7,
+  LAST_SYNCED_NAME: 8,
+  LAST_SYNCED_PRICE: 9,
+} as const
+
+export const HEADERS_MESH = [
+  'MARCA', 'FORMATO', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
+  '_mesh_id', '_last_synced_name', '_last_synced_price',
+]
+
+export const MESH_TAB_NAME = 'Mallas'
+
+// Gemelo de rowRange() para el layout de Mallas — rowRange() hardcodea la
+// columna final en COL.LAST_SYNCED_PRICE (propia de Pisos, columna I).
+export function rowRangeMesh(title: string, startRow1: number, endRow1: number): string {
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_MESH.LAST_SYNCED_PRICE)}${endRow1}`
+}
+
+const VISIBLE_COLS_MESH = { startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.PRECIO + 1 }
+
+// Protege MARCA+FORMATO, PIEZAS/M2 y PRECIO — solo DESCRIPCIÓN/CAJAS EN
+// EXISTENCIA quedan libres para el personal (mismo criterio que Pisos).
+export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
+  const editors = { users: [serviceAccountEmail] }
+  return [
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.FORMATO + 1 },
+      description: 'MARCA/FORMATO - solo lectura', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_MESH.PIEZAS_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
+      description: 'PIEZAS/M2 - solo lectura', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_MESH.PRECIO, endColumnIndex: COL_MESH.PRECIO + 1 },
+      description: 'PRECIO - solo lectura', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_MESH.MESH_ID, endColumnIndex: COL_MESH.LAST_SYNCED_PRICE + 1 },
+      description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
+    } } },
+  ]
+}
+
+export function buildMeshHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { updateDimensionProperties: {
+    range: { sheetId, dimension: 'COLUMNS', startIndex: COL_MESH.MESH_ID, endIndex: COL_MESH.LAST_SYNCED_PRICE + 1 },
+    properties: { hiddenByUser: true },
+    fields: 'hiddenByUser',
+  } }
+}
+
+export function buildMeshZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { addConditionalFormatRule: {
+    rule: {
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_MESH }],
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_MESH.MESH_ID)}2<>"";$${colLetter(COL_MESH.CAJAS_EN_EXISTENCIA)}2=0)` }] },
+        format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
+      },
+    },
+    index: 0,
+  } }
+}
+
+export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$Request[] {
+  const style = { style: 'SOLID' as const, color: hexToRgb(COLORS.border) }
+  const widths: [number, number][] = [
+    [COL_MESH.MARCA, 110], [COL_MESH.FORMATO, 80], [COL_MESH.DESCRIPCION, 220],
+    [COL_MESH.PIEZAS_X_CAJA, 100], [COL_MESH.M2_X_CAJA, 90], [COL_MESH.CAJAS_EN_EXISTENCIA, 150],
+    [COL_MESH.PRECIO, 100],
+  ]
+  return [
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, ...VISIBLE_COLS_MESH },
+      cell: { userEnteredFormat: {
+        backgroundColor: hexToRgb(COLORS.headerBg),
+        textFormat: { bold: true, foregroundColor: hexToRgb(COLORS.headerText) },
+        horizontalAlignment: 'CENTER',
+        verticalAlignment: 'MIDDLE',
+      } },
+      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.M2_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0.00' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.PRECIO, endColumnIndex: COL_MESH.PRECIO + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '"$"#,##0.00' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { updateBorders: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_MESH },
+      top: style, bottom: style, left: style, right: style, innerHorizontal: style, innerVertical: style,
+    } },
+    { setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_MESH } } } },
+    ...widths.map(([index, pixelSize]) => ({
+      updateDimensionProperties: {
+        range: { sheetId, dimension: 'COLUMNS' as const, startIndex: index, endIndex: index + 1 },
+        properties: { pixelSize },
+        fields: 'pixelSize',
+      },
+    })),
+  ]
+}

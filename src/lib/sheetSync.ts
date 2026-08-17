@@ -10,6 +10,7 @@ import {
   COL, HEADERS, TabInfo, CellValue,
 } from './googleSheets'
 import { syncAccessoriesForBodegas, AccessoryBodegaResult } from './accessorySheetSync'
+import { syncMeshesForBodegas, MeshBodegaResult } from './meshSheetSync'
 
 // -------- Configuración de bodegas (qué archivos de Sheets están activos) --------
 
@@ -404,6 +405,7 @@ export interface SyncSummary {
   ranAt: string
   durationMs: number
   bodegas: BodegaResult[]
+  meshBodegas: MeshBodegaResult[]
   accessoryBodegas: AccessoryBodegaResult[]
   conflicts: { productId: string; field: 'name' | 'price' }[]
   skipped?: boolean
@@ -456,7 +458,7 @@ export async function syncAllBodegas(options?: { allowStructural?: boolean; invo
   const invocationId = options?.invocationId ?? crypto.randomUUID()
   const startedAt = Date.now()
   const configs = getConfiguredBodegas()
-  const summary: SyncSummary = { ranAt: new Date().toISOString(), durationMs: 0, bodegas: [], accessoryBodegas: [], conflicts: [] }
+  const summary: SyncSummary = { ranAt: new Date().toISOString(), durationMs: 0, bodegas: [], meshBodegas: [], accessoryBodegas: [], conflicts: [] }
 
   if (configs.length === 0) {
     summary.durationMs = Date.now() - startedAt
@@ -494,8 +496,9 @@ export async function syncAllBodegas(options?: { allowStructural?: boolean; invo
       }
     }
 
-    // Misma bodega/candado/invocación — los adhesivos van como una pestaña
-    // más dentro del mismo archivo por bodega, no un archivo aparte.
+    // Misma bodega/candado/invocación — mallas y adhesivos van como pestañas
+    // adicionales dentro del mismo archivo por bodega, no archivos aparte.
+    summary.meshBodegas = await syncMeshesForBodegas(sheets, supabase, configs, allowStructural, invocationId)
     summary.accessoryBodegas = await syncAccessoriesForBodegas(sheets, supabase, configs, allowStructural, invocationId)
   } finally {
     await releaseLock(supabase)

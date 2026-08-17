@@ -1,6 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Search, Layers, Toilet, Package, ArrowRight, Calculator } from 'lucide-react'
+import { Search, Layers, Grid3x3, Toilet, Package, ArrowRight, Calculator } from 'lucide-react'
 
 export const revalidate = 60
 
@@ -16,9 +16,16 @@ const BRAND_LOGOS: Record<string, string> = {
 export default async function HomePage() {
   const supabase = await createServerSupabaseClient()
 
-  const [pisosRes, banosRes, accRes, brandsRes] = await Promise.all([
+  const [pisosRes, mallasRes, banosRes, accRes, brandsRes] = await Promise.all([
     supabase
       .from('products')
+      .select('id, name, image_url, size:sizes(label)', { count: 'exact' })
+      .eq('is_active', true)
+      .not('image_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(14),
+    supabase
+      .from('meshes')
       .select('id, name, image_url, size:sizes(label)', { count: 'exact' })
       .eq('is_active', true)
       .not('image_url', 'is', null)
@@ -42,6 +49,7 @@ export default async function HomePage() {
   ])
 
   const pisos = pisosRes.data || []
+  const mallas = mallasRes.data || []
   const banos = banosRes.data || []
   const accesorios = accRes.data || []
   const brandsWithLogo = (brandsRes.data || [])
@@ -49,11 +57,13 @@ export default async function HomePage() {
     .filter(b => b.logo)
 
   const pisosCount = pisosRes.count || 0
+  const mallasCount = mallasRes.count || 0
   const banosCount = banosRes.count || 0
   const accCount = accRes.count || 0
 
   // Duplicamos la lista para lograr un loop infinito sin saltos
   const pisosLoop = pisos.length > 0 ? [...pisos, ...pisos] : []
+  const mallasLoop = mallas.length > 0 ? [...mallas, ...mallas] : []
   const banosLoop = banos.length > 0 ? [...banos, ...banos] : []
   const accLoop = accesorios.length > 0 ? [...accesorios, ...accesorios] : []
 
@@ -61,7 +71,7 @@ export default async function HomePage() {
     <div className="fade-in home-page">
       <section className="home-hero">
         <img src="/logo1.png" alt="Pisos y Azulejos de Jalpan" className="home-hero-logo" />
-        <span className="home-hero-eyebrow">Pisos · Baños · Adhesivos</span>
+        <span className="home-hero-eyebrow">Pisos · Mallas · Baños · Adhesivos</span>
         <h1 className="home-hero-title">Pisos y Azulejos de Jalpan</h1>
         <p className="home-hero-subtitle">¿Qué estás buscando hoy?</p>
 
@@ -80,6 +90,10 @@ export default async function HomePage() {
           <div className="home-stat">
             <div className="home-stat-number">{pisosCount}</div>
             <div className="home-stat-label">Pisos en catálogo</div>
+          </div>
+          <div className="home-stat">
+            <div className="home-stat-number">{mallasCount}</div>
+            <div className="home-stat-label">Mallas</div>
           </div>
           <div className="home-stat">
             <div className="home-stat-number">{banosCount}</div>
@@ -102,6 +116,16 @@ export default async function HomePage() {
               <span className="home-category-panel-icon"><Layers size={20} /></span>
               <span className="home-category-panel-count">{pisosCount} productos</span>
               <h3>Pisos</h3>
+              <span className="home-category-panel-cta">Ver catálogo <ArrowRight size={14} /></span>
+            </div>
+          </Link>
+          <Link href="/mallas" className="home-category-panel">
+            {mallas[0]?.image_url && <img src={mallas[0].image_url} alt="" className="home-category-panel-img" />}
+            <div className="home-category-panel-overlay" />
+            <div className="home-category-panel-content">
+              <span className="home-category-panel-icon"><Grid3x3 size={20} /></span>
+              <span className="home-category-panel-count">{mallasCount} productos</span>
+              <h3>Mallas</h3>
               <span className="home-category-panel-cta">Ver catálogo <ArrowRight size={14} /></span>
             </div>
           </Link>
@@ -170,6 +194,29 @@ export default async function HomePage() {
                   </div>
                   <div className="card-body">
                     <h3 className="card-title">{p.name}</h3>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {mallasLoop.length > 0 && (
+        <section className="marquee-row">
+          <div className="marquee-row-label">
+            <Grid3x3 size={14} /> Mallas
+          </div>
+          <div className="marquee-viewport">
+            <div className="marquee-track reverse" style={{ ['--duration' as string]: '56s' }}>
+              {mallasLoop.map((m, i) => (
+                <Link key={`${m.id}-${i}`} href={`/mallas/${m.id}`} className="card marquee-card">
+                  <div className="card-image-wrapper">
+                    <img src={m.image_url!} alt={m.name} className="card-image" />
+                    {m.size && <span className="card-image-size-badge">{(m.size as unknown as { label: string }).label}</span>}
+                  </div>
+                  <div className="card-body">
+                    <h3 className="card-title">{m.name}</h3>
                   </div>
                 </Link>
               ))}
