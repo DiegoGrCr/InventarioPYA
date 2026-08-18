@@ -7,6 +7,7 @@ import {
   applyStructuralRequests, createMissingTabs, buildProtectionRequests, buildHideColumnsRequest,
   buildFreezeHeaderRequest, buildUnmergeRequest, buildMergeRequest, cellRange, rowRange,
   buildRepeatableStyleRequests, buildZeroStockHighlightRequest,
+  getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
   COL, HEADERS, TabInfo, CellValue,
 } from './googleSheets'
 import { syncAccessoriesForBodegas, AccessoryBodegaResult } from './accessorySheetSync'
@@ -38,6 +39,7 @@ interface MasterRow {
   name: string
   brand: string
   formato: string
+  sku: string | null
   area: number
   piezas: number | null
   m2: number | null
@@ -52,14 +54,14 @@ async function fetchMasterData(supabase: ReturnType<typeof createPlainSupabaseCl
 
   const { data, error } = await supabase
     .from('product_bodega_stock')
-    .select('bodega, stock, product:products!inner(id, name, price_per_sqm, sale_unit, pieces_per_box, sqm_per_box, is_active, brand:brands(name), size:sizes(label, width, height))')
+    .select('bodega, stock, product:products!inner(id, name, sku, price_per_sqm, sale_unit, pieces_per_box, sqm_per_box, is_active, brand:brands(name), size:sizes(label, width, height))')
     .in('bodega', bodegas)
     .eq('product.is_active', true)
 
   if (error) throw new Error(`Error leyendo product_bodega_stock: ${error.message}`)
 
   interface ProductJoin {
-    id: string; name: string; price_per_sqm: number | null; sale_unit: 'caja' | 'pieza'
+    id: string; name: string; sku: string | null; price_per_sqm: number | null; sale_unit: 'caja' | 'pieza'
     pieces_per_box: number | null; sqm_per_box: number | null
     brand: { name: string } | null; size: { label: string; width: number; height: number } | null
   }
@@ -74,6 +76,7 @@ async function fetchMasterData(supabase: ReturnType<typeof createPlainSupabaseCl
       name: p.name,
       brand: p.brand?.name || 'Sin marca',
       formato: p.size?.label || 'Sin medida',
+      sku: p.sku,
       area: p.size ? p.size.width * p.size.height : 0,
       piezas: p.sale_unit === 'pieza' ? null : p.pieces_per_box,
       m2: p.sqm_per_box,
@@ -266,7 +269,7 @@ async function applyPulls(
 
 function buildTabContentValues(rows: MasterRow[]): (string | number)[][] {
   return sortByFormatoThenName(rows).map(it => [
-    it.formato, it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
+    it.formato, it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
     it.productId, it.name, it.precio ?? '',
   ])
 }
@@ -341,7 +344,16 @@ async function reconcileBodega(
       continue
     }
 
-    if (isNewTab) {
+    if (isNewTab || structurallyDifferent) {
+      // Protecciones y formato condicional NO son idempotentes (se apilarían
+      // duplicados si se reagregan sin más) — en una pestaña ya existente que
+      // se está reconstruyendo, primero hay que borrar las que tenía (podrían
+      // estar protegiendo las columnas equivocadas si el layout cambió, ej.
+      // se insertó una columna nueva) antes de volver a agregarlas.
+      if (!isNewTab) {
+        const { protectedRangeIds, conditionalFormatCount } = await getSheetProtectionState(sheets, config.spreadsheetId, sheetId)
+        structural.push(...buildClearProtectionsAndFormatsRequests(sheetId, protectedRangeIds, conditionalFormatCount))
+      }
       structural.push(...buildProtectionRequests(sheetId, serviceAccountEmail))
       structural.push(buildHideColumnsRequest(sheetId))
       structural.push(buildFreezeHeaderRequest(sheetId))

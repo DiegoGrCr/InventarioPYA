@@ -3,25 +3,39 @@ import { google, sheets_v4 } from 'googleapis'
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
 // Layout de columnas (0-indexado) que usan todas las pestañas de sync.
-// A-F son visibles, G-I son ocultas y solo las usa el sync.
+// A-G son visibles, H-J son ocultas y solo las usa el sync.
 export const COL = {
   FORMATO: 0,
-  DESCRIPCION: 1,
-  PIEZAS_X_CAJA: 2,
-  M2_X_CAJA: 3,
-  CAJAS_EN_EXISTENCIA: 4,
-  PRECIO: 5,
-  PRODUCT_ID: 6,
-  LAST_SYNCED_NAME: 7,
-  LAST_SYNCED_PRICE: 8,
+  SKU: 1,
+  DESCRIPCION: 2,
+  PIEZAS_X_CAJA: 3,
+  M2_X_CAJA: 4,
+  CAJAS_EN_EXISTENCIA: 5,
+  PRECIO: 6,
+  PRODUCT_ID: 7,
+  LAST_SYNCED_NAME: 8,
+  LAST_SYNCED_PRICE: 9,
 } as const
 
 export const HEADERS = [
-  'FORMATO', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
+  'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
   '_product_id', '_last_synced_name', '_last_synced_price',
 ]
 
 const DATA_LAST_ROW = 5000
+
+// Rango genérico usado por batchGetTabValues/batchClearTabs para leer/borrar
+// pestañas SIN importar su layout específico (Pisos/Mallas/Adhesivos tienen
+// distinto número de columnas ocultas al final). Debe ser siempre igual o más
+// ancho que la columna oculta más a la derecha de cualquier layout — usar la
+// columna de un layout específico aquí (como se hacía antes con rowRange(),
+// pensado solo para Pisos) corta las columnas ocultas de los demás layouts si
+// son más anchos, hasta el punto de que _last_synced_price nunca se llegaba a
+// leer para Mallas y esa fila se trataba como "recién editada" en cada corrida.
+const SYNC_FETCH_LAST_COL = 25 // columna Z — margen amplio sobre cualquier layout actual
+function fullRowRange(title: string, startRow1: number, endRow1: number): string {
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(SYNC_FETCH_LAST_COL)}${endRow1}`
+}
 
 function getAuth() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
@@ -82,7 +96,7 @@ export async function batchGetTabValues(sheets: sheets_v4.Sheets, spreadsheetId:
   if (titles.length === 0) return result
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId,
-    ranges: titles.map(t => rowRange(t, 1, DATA_LAST_ROW)),
+    ranges: titles.map(t => fullRowRange(t, 1, DATA_LAST_ROW)),
     valueRenderOption: 'UNFORMATTED_VALUE',
   })
   ;(res.data.valueRanges || []).forEach((vr, i) => {
@@ -104,7 +118,7 @@ export async function batchClearTabs(sheets: sheets_v4.Sheets, spreadsheetId: st
   if (titles.length === 0) return
   await sheets.spreadsheets.values.batchClear({
     spreadsheetId,
-    requestBody: { ranges: titles.map(t => rowRange(t, 2, DATA_LAST_ROW)) },
+    requestBody: { ranges: titles.map(t => fullRowRange(t, 2, DATA_LAST_ROW)) },
   })
 }
 
@@ -112,6 +126,34 @@ export async function applyStructuralRequests(sheets: sheets_v4.Sheets, spreadsh
   if (requests.length === 0) return []
   const res = await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests } })
   return res.data.replies || []
+}
+
+// Las protecciones (addProtectedRange) y las reglas de formato condicional
+// (addConditionalFormatRule) NO son idempotentes — llamarlas de nuevo apila
+// reglas duplicadas en vez de reemplazar las existentes. Por eso solo se
+// agregaban una vez, al crear la pestaña. Pero cuando el LAYOUT de columnas
+// cambia (ej. se inserta una columna nueva) o se reconstruye una pestaña ya
+// existente, las protecciones viejas quedan protegiendo las columnas
+// EQUIVOCADAS (las que antes eran otra cosa) — hay que borrarlas primero.
+export async function getSheetProtectionState(sheets: sheets_v4.Sheets, spreadsheetId: string, sheetId: number): Promise<{ protectedRangeIds: number[]; conditionalFormatCount: number }> {
+  const res = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'sheets(properties(sheetId),protectedRanges(protectedRangeId),conditionalFormats)',
+  })
+  const sheet = (res.data.sheets || []).find(s => s.properties?.sheetId === sheetId)
+  return {
+    protectedRangeIds: (sheet?.protectedRanges || []).map(p => p.protectedRangeId).filter((id): id is number => id != null),
+    conditionalFormatCount: (sheet?.conditionalFormats || []).length,
+  }
+}
+
+export function buildClearProtectionsAndFormatsRequests(sheetId: number, protectedRangeIds: number[], conditionalFormatCount: number): sheets_v4.Schema$Request[] {
+  return [
+    ...protectedRangeIds.map(id => ({ deleteProtectedRange: { protectedRangeId: id } })),
+    // Al borrar la regla en el índice 0, la siguiente pasa a ocupar ese mismo
+    // índice — repetir "borra el índice 0" N veces borra las N reglas.
+    ...Array.from({ length: conditionalFormatCount }, () => ({ deleteConditionalFormatRule: { sheetId, index: 0 } })),
+  ]
 }
 
 // Crea las pestañas faltantes en una sola llamada y regresa título -> sheetId real
@@ -128,20 +170,20 @@ export async function createMissingTabs(sheets: sheets_v4.Sheets, spreadsheetId:
   return map
 }
 
-// Protege FORMATO, PIEZAS X CAJA/M² X CAJA, PRECIO y las columnas ocultas de
-// sync — solo la cuenta de servicio (y el dueño del archivo, siempre
-// implícito) puede editarlas. Solo DESCRIPCIÓN/CAJAS EN EXISTENCIA quedan
-// libres para el personal.
+// Protege FORMATO/SKU, PIEZAS X CAJA/M² X CAJA, PRECIO, la fila de encabezados
+// y las columnas ocultas de sync — solo la cuenta de servicio (y el dueño del
+// archivo, siempre implícito) puede editarlas. Solo DESCRIPCIÓN/CAJAS EN
+// EXISTENCIA quedan libres para el personal.
 export function buildProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
   return [
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL.FORMATO, endColumnIndex: COL.FORMATO + 1 },
-      description: 'FORMATO - solo lectura', warningOnly: false, editors,
+      range: { sheetId, startColumnIndex: COL.FORMATO, endColumnIndex: COL.SKU + 1 },
+      description: 'FORMATO/SKU - solo lectura', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
-      // C:D — PIEZAS X CAJA / M² X CAJA. OJO: no se puede fusionar con el
-      // rango de PRECIO (F) porque entre medio está CAJAS EN EXISTENCIA (E),
+      // D:E — PIEZAS X CAJA / M² X CAJA. OJO: no se puede fusionar con el
+      // rango de PRECIO (G) porque entre medio está CAJAS EN EXISTENCIA (F),
       // que debe quedar editable — necesitan ser 2 rangos separados.
       range: { sheetId, startColumnIndex: COL.PIEZAS_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
       description: 'PIEZAS/M2 - solo lectura', warningOnly: false, editors,
@@ -153,6 +195,13 @@ export function buildProtectionRequests(sheetId: number, serviceAccountEmail: st
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startColumnIndex: COL.PRODUCT_ID, endColumnIndex: COL.LAST_SYNCED_PRICE + 1 },
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      // Fila de encabezados completa (incl. DESCRIPCIÓN/CAJAS EN EXISTENCIA,
+      // que sí quedan editables en las filas de datos) — el personal solo
+      // debería poder escribir sus valores, no renombrar las columnas.
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL.FORMATO, endColumnIndex: COL.PRECIO + 1 },
+      description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
   ]
 }
@@ -233,7 +282,7 @@ export function buildNumberFormatRequests(sheetId: number): sheets_v4.Schema$Req
       fields: 'userEnteredFormat.numberFormat',
     } },
     { repeatCell: {
-      range: { sheetId, startRowIndex: 1, startColumnIndex: COL.FORMATO, endColumnIndex: COL.FORMATO + 1 },
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL.FORMATO, endColumnIndex: COL.SKU + 1 },
       cell: { userEnteredFormat: { horizontalAlignment: 'CENTER' } },
       fields: 'userEnteredFormat.horizontalAlignment',
     } },
@@ -257,7 +306,7 @@ export function buildFilterRequest(sheetId: number): sheets_v4.Schema$Request {
 // Anchos de columna razonables — idempotente.
 export function buildColumnWidthRequests(sheetId: number): sheets_v4.Schema$Request[] {
   const widths: [number, number][] = [
-    [COL.FORMATO, 80], [COL.DESCRIPCION, 240], [COL.PIEZAS_X_CAJA, 100],
+    [COL.FORMATO, 80], [COL.SKU, 110], [COL.DESCRIPCION, 240], [COL.PIEZAS_X_CAJA, 100],
     [COL.M2_X_CAJA, 90], [COL.CAJAS_EN_EXISTENCIA, 150], [COL.PRECIO, 100],
   ]
   return widths.map(([index, pixelSize]) => ({
@@ -352,6 +401,10 @@ export function buildAccessoryProtectionRequests(sheetId: number, serviceAccount
       range: { sheetId, startColumnIndex: COL_ACC.ACCESSORY_ID, endColumnIndex: COL_ACC.LAST_SYNCED_PRICE + 1 },
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.PRECIO + 1 },
+      description: 'Encabezados - solo lectura', warningOnly: false, editors,
+    } } },
   ]
 }
 
@@ -431,18 +484,19 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
 export const COL_MESH = {
   MARCA: 0,
   FORMATO: 1,
-  DESCRIPCION: 2,
-  PIEZAS_X_CAJA: 3,
-  M2_X_CAJA: 4,
-  CAJAS_EN_EXISTENCIA: 5,
-  PRECIO: 6,
-  MESH_ID: 7,
-  LAST_SYNCED_NAME: 8,
-  LAST_SYNCED_PRICE: 9,
+  SKU: 2,
+  DESCRIPCION: 3,
+  PIEZAS_X_CAJA: 4,
+  M2_X_CAJA: 5,
+  CAJAS_EN_EXISTENCIA: 6,
+  PRECIO: 7,
+  MESH_ID: 8,
+  LAST_SYNCED_NAME: 9,
+  LAST_SYNCED_PRICE: 10,
 } as const
 
 export const HEADERS_MESH = [
-  'MARCA', 'FORMATO', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
+  'MARCA', 'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
   '_mesh_id', '_last_synced_name', '_last_synced_price',
 ]
 
@@ -456,14 +510,15 @@ export function rowRangeMesh(title: string, startRow1: number, endRow1: number):
 
 const VISIBLE_COLS_MESH = { startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.PRECIO + 1 }
 
-// Protege MARCA+FORMATO, PIEZAS/M2 y PRECIO — solo DESCRIPCIÓN/CAJAS EN
-// EXISTENCIA quedan libres para el personal (mismo criterio que Pisos).
+// Protege MARCA+FORMATO+SKU, PIEZAS/M2, PRECIO, la fila de encabezados y las
+// columnas ocultas — solo DESCRIPCIÓN/CAJAS EN EXISTENCIA quedan libres para
+// el personal (mismo criterio que Pisos).
 export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
   return [
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.FORMATO + 1 },
-      description: 'MARCA/FORMATO - solo lectura', warningOnly: false, editors,
+      range: { sheetId, startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.SKU + 1 },
+      description: 'MARCA/FORMATO/SKU - solo lectura', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startColumnIndex: COL_MESH.PIEZAS_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
@@ -476,6 +531,10 @@ export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startColumnIndex: COL_MESH.MESH_ID, endColumnIndex: COL_MESH.LAST_SYNCED_PRICE + 1 },
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.PRECIO + 1 },
+      description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
   ]
 }
@@ -504,7 +563,7 @@ export function buildMeshZeroStockHighlightRequest(sheetId: number): sheets_v4.S
 export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$Request[] {
   const style = { style: 'SOLID' as const, color: hexToRgb(COLORS.border) }
   const widths: [number, number][] = [
-    [COL_MESH.MARCA, 110], [COL_MESH.FORMATO, 80], [COL_MESH.DESCRIPCION, 220],
+    [COL_MESH.MARCA, 110], [COL_MESH.FORMATO, 80], [COL_MESH.SKU, 110], [COL_MESH.DESCRIPCION, 220],
     [COL_MESH.PIEZAS_X_CAJA, 100], [COL_MESH.M2_X_CAJA, 90], [COL_MESH.CAJAS_EN_EXISTENCIA, 150],
     [COL_MESH.PRECIO, 100],
   ]

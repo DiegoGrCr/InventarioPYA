@@ -6,6 +6,7 @@ import {
   applyStructuralRequests, createMissingTabs, buildMeshProtectionRequests,
   buildMeshHideColumnsRequest, buildFreezeHeaderRequest, buildMeshZeroStockHighlightRequest,
   buildMeshRepeatableStyleRequests, cellRange, rowRangeMesh,
+  getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
   COL_MESH, HEADERS_MESH, MESH_TAB_NAME, TabInfo, CellValue,
 } from './googleSheets'
 
@@ -16,6 +17,7 @@ interface MeshMasterRow {
   name: string
   brand: string
   formato: string
+  sku: string | null
   piezas: number | null
   m2: number | null
   precio: number | null
@@ -29,14 +31,14 @@ async function fetchMeshMasterData(supabase: ReturnType<typeof createPlainSupaba
 
   const { data, error } = await supabase
     .from('mesh_bodega_stock')
-    .select('bodega, stock, mesh:meshes!inner(id, name, price_per_sqm, pieces_per_box, sqm_per_box, sale_unit, is_active, brand:brands(name), size:sizes(label))')
+    .select('bodega, stock, mesh:meshes!inner(id, name, sku, price_per_sqm, pieces_per_box, sqm_per_box, sale_unit, is_active, brand:brands(name), size:sizes(label))')
     .in('bodega', bodegas)
     .eq('mesh.is_active', true)
 
   if (error) throw new Error(`Error leyendo mesh_bodega_stock: ${error.message}`)
 
   interface MeshJoin {
-    id: string; name: string; price_per_sqm: number | null; pieces_per_box: number | null
+    id: string; name: string; sku: string | null; price_per_sqm: number | null; pieces_per_box: number | null
     sqm_per_box: number | null; brand: { name: string } | null; size: { label: string } | null
   }
 
@@ -46,7 +48,7 @@ async function fetchMeshMasterData(supabase: ReturnType<typeof createPlainSupaba
     const list = result.get(row.bodega)
     if (!list) return
     list.push({
-      meshId: m.id, name: m.name, brand: m.brand?.name || '', formato: m.size?.label || '',
+      meshId: m.id, name: m.name, brand: m.brand?.name || '', formato: m.size?.label || '', sku: m.sku,
       piezas: m.pieces_per_box, m2: m.sqm_per_box, precio: m.price_per_sqm, stock: row.stock,
     })
   })
@@ -218,7 +220,7 @@ async function applyMeshPulls(
 
 function buildMeshTabContentValues(rows: MeshMasterRow[]): (string | number)[][] {
   return sortMeshRows(rows).map(it => [
-    it.brand || 'Sin marca', it.formato || '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
+    it.brand || 'Sin marca', it.formato || '', it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
     it.meshId, it.name, it.precio ?? '',
   ])
 }
@@ -258,7 +260,11 @@ async function reconcileMeshBodega(
   const toClear: string[] = []
   let rebuilt = false
 
-  if (isNewTab) {
+  if (isNewTab || structurallyDifferent) {
+    if (!isNewTab) {
+      const { protectedRangeIds, conditionalFormatCount } = await getSheetProtectionState(sheets, config.spreadsheetId, sheetId!)
+      structural.push(...buildClearProtectionsAndFormatsRequests(sheetId!, protectedRangeIds, conditionalFormatCount))
+    }
     structural.push(...buildMeshProtectionRequests(sheetId!, serviceAccountEmail))
     structural.push(buildMeshHideColumnsRequest(sheetId!))
     structural.push(buildFreezeHeaderRequest(sheetId!))

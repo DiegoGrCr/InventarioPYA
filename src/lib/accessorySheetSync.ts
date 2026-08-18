@@ -6,6 +6,7 @@ import {
   applyStructuralRequests, createMissingTabs, buildAccessoryProtectionRequests,
   buildAccessoryHideColumnsRequest, buildFreezeHeaderRequest, buildAccessoryZeroStockHighlightRequest,
   buildAccessoryRepeatableStyleRequests, cellRange, rowRangeAcc,
+  getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
   COL_ACC, HEADERS_ACC, ACCESSORY_TAB_NAME, TabInfo, CellValue,
 } from './googleSheets'
 
@@ -241,7 +242,11 @@ async function reconcileAccessoryBodega(
   const toClear: string[] = []
   let rebuilt = false
 
-  if (isNewTab) {
+  if (isNewTab || structurallyDifferent) {
+    if (!isNewTab) {
+      const { protectedRangeIds, conditionalFormatCount } = await getSheetProtectionState(sheets, config.spreadsheetId, sheetId!)
+      structural.push(...buildClearProtectionsAndFormatsRequests(sheetId!, protectedRangeIds, conditionalFormatCount))
+    }
     structural.push(...buildAccessoryProtectionRequests(sheetId!, serviceAccountEmail))
     structural.push(buildAccessoryHideColumnsRequest(sheetId!))
     structural.push(buildFreezeHeaderRequest(sheetId!))
