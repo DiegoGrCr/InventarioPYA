@@ -437,7 +437,11 @@ export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Sch
 export function buildAccessoryZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
   return { addConditionalFormatRule: {
     rule: {
-      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_ACC }],
+      // OJO: arranca en SKU, no en CATEGORÍA — CATEGORÍA está fusionada en
+      // bloques grandes (Adhesivo/Boquilla) y una fórmula por-fila no se
+      // puede pintar de forma sensata ahí: si UNA fila del bloque tiene stock
+      // en 0, pintaría el bloque entero de rojo aunque el resto sí tenga stock.
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 }],
       booleanRule: {
         condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"";$${colLetter(COL_ACC.CANTIDAD)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
