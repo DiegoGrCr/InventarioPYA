@@ -75,6 +75,7 @@ export interface Accessory {
   color: string | null
   bodegas: string[] | null
   image_url: string | null
+  sku: string | null
   stock: number
   price: number | null
   is_active: boolean

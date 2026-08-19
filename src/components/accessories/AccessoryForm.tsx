@@ -174,7 +174,7 @@ export default function AccessoryForm({ accessory, bodegaStock = [] }: Accessory
         </div>
       </div>
 
-      <div className="form-row">
+      <div className="form-row-3">
         <div className="form-group">
           <label className="form-label">Peso</label>
           <input
@@ -193,6 +193,16 @@ export default function AccessoryForm({ accessory, bodegaStock = [] }: Accessory
             className="form-input"
             defaultValue={accessory?.color || ''}
             placeholder="Blanco"
+          />
+        </div>
+        <div className="form-group">
+          <label className="form-label">SKU</label>
+          <input
+            type="text"
+            name="sku"
+            className="form-input"
+            defaultValue={accessory?.sku || ''}
+            placeholder="Código único"
           />
         </div>
       </div>

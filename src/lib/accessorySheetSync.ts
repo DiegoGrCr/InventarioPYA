@@ -5,7 +5,8 @@ import {
   listTabs, batchGetTabValues, batchWriteCells, batchClearTabs,
   applyStructuralRequests, createMissingTabs, buildAccessoryProtectionRequests,
   buildAccessoryHideColumnsRequest, buildFreezeHeaderRequest, buildAccessoryZeroStockHighlightRequest,
-  buildAccessoryRepeatableStyleRequests, cellRange, rowRangeAcc,
+  buildAccessoryRepeatableStyleRequests, buildAccessoryUnmergeRequest, buildAccessoryMergeRequest,
+  cellRange, rowRangeAcc,
   getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
   COL_ACC, HEADERS_ACC, ACCESSORY_TAB_NAME, TabInfo, CellValue,
 } from './googleSheets'
@@ -16,6 +17,7 @@ interface AccessoryMasterRow {
   accessoryId: string
   name: string
   category: string
+  sku: string | null
   precio: number | null
   stock: number
 }
@@ -27,26 +29,45 @@ async function fetchAccessoryMasterData(supabase: ReturnType<typeof createPlainS
 
   const { data, error } = await supabase
     .from('accessory_bodega_stock')
-    .select('bodega, stock, accessory:accessories!inner(id, name, category, price, is_active)')
+    .select('bodega, stock, accessory:accessories!inner(id, name, category, sku, price, is_active)')
     .in('bodega', bodegas)
     .eq('accessory.is_active', true)
 
   if (error) throw new Error(`Error leyendo accessory_bodega_stock: ${error.message}`)
 
-  interface AccessoryJoin { id: string; name: string; category: string; price: number | null }
+  interface AccessoryJoin { id: string; name: string; category: string; sku: string | null; price: number | null }
 
   ;(data || []).forEach(row => {
     const a = row.accessory as unknown as AccessoryJoin | null
     if (!a) return
     const list = result.get(row.bodega)
     if (!list) return
-    list.push({ accessoryId: a.id, name: a.name, category: a.category, precio: a.price, stock: row.stock })
+    list.push({ accessoryId: a.id, name: a.name, category: a.category, sku: a.sku, precio: a.price, stock: row.stock })
   })
   return result
 }
 
 function sortAccessoryRows(rows: AccessoryMasterRow[]): AccessoryMasterRow[] {
   return [...rows].sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+}
+
+interface CategoryGroup { category: string; items: AccessoryMasterRow[] }
+
+// Agrupa corridas consecutivas de misma categoría — asume que items ya viene
+// ordenado (ver sortAccessoryRows) para que los iguales queden juntos. Mismo
+// patrón que groupConsecutiveByFormato (inventoryGrouping.ts) mueve para
+// Pisos, aquí local porque el campo agrupado es distinto (category, no formato).
+function groupConsecutiveByCategory(items: AccessoryMasterRow[]): CategoryGroup[] {
+  const groups: CategoryGroup[] = []
+  let i = 0
+  while (i < items.length) {
+    const category = items[i].category
+    let j = i
+    while (j < items.length && items[j].category === category) j++
+    groups.push({ category, items: items.slice(i, j) })
+    i = j
+  }
+  return groups
 }
 
 // -------- Fase A: leer la pestaña y detectar qué cambió del lado del personal --------
@@ -202,9 +223,24 @@ async function applyAccessoryPulls(
 
 function buildAccessoryTabContentValues(rows: AccessoryMasterRow[]): (string | number)[][] {
   return sortAccessoryRows(rows).map(it => [
-    it.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla', it.name, it.stock, it.precio ?? '',
+    it.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla', it.sku ?? '', it.name, it.stock, it.precio ?? '',
     it.accessoryId, it.name, it.precio ?? '',
   ])
+}
+
+// Combina en un solo bloque grande las celdas de CATEGORÍA de cada grupo
+// consecutivo (Adhesivo/Boquilla) — mismo patrón que buildMergeRequestsForGroups
+// para FORMATO en Pisos.
+function buildAccessoryMergeRequestsForGroups(sheetId: number, rows: AccessoryMasterRow[]): sheets_v4.Schema$Request[] {
+  const requests: sheets_v4.Schema$Request[] = []
+  let rowCursor1 = 2 // fila 1 = headers
+  groupConsecutiveByCategory(sortAccessoryRows(rows)).forEach(group => {
+    const startRow0 = rowCursor1 - 1
+    rowCursor1 += group.items.length
+    const endRow0 = rowCursor1 - 1
+    if (endRow0 - startRow0 > 1) requests.push(buildAccessoryMergeRequest(sheetId, startRow0, endRow0))
+  })
+  return requests
 }
 
 export interface AccessoryBodegaResult { bodega: string; rebuilt: boolean; cellsWritten: number; error?: string; needsReview?: boolean }
@@ -257,6 +293,8 @@ async function reconcileAccessoryBodega(
 
   if (structurallyDifferent) {
     if (!isNewTab) toClear.push(ACCESSORY_TAB_NAME)
+    structural.push(buildAccessoryUnmergeRequest(sheetId!))
+    structural.push(...buildAccessoryMergeRequestsForGroups(sheetId!, freshRows))
     const values = buildAccessoryTabContentValues(freshRows)
     if (values.length > 0) writes.push({ range: rowRangeAcc(ACCESSORY_TAB_NAME, 2, 1 + values.length), values })
     rebuilt = true

@@ -357,19 +357,25 @@ export function buildRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$
 // Layout propio y más simple que el de Pisos (COL/HEADERS arriba) — sin
 // FORMATO/PIEZAS/M², que no aplican a adhesivos/boquillas. Coincide con el
 // nivel de detalle que ya usa el export a Excel de "Adhesivos".
+//
+// A diferencia de Pisos/Mallas, aquí solo CANTIDAD queda editable para el
+// personal — ni siquiera la descripción. CATEGORÍA se agrupa en 2 bloques
+// grandes fusionados (Adhesivo/Boquilla), mismo patrón visual que FORMATO en
+// Pisos — reclasificar un producto se sigue haciendo desde la app.
 
 export const COL_ACC = {
   CATEGORIA: 0,
-  DESCRIPCION: 1,
-  CANTIDAD: 2,
-  PRECIO: 3,
-  ACCESSORY_ID: 4,
-  LAST_SYNCED_NAME: 5,
-  LAST_SYNCED_PRICE: 6,
+  SKU: 1,
+  DESCRIPCION: 2,
+  CANTIDAD: 3,
+  PRECIO: 4,
+  ACCESSORY_ID: 5,
+  LAST_SYNCED_NAME: 6,
+  LAST_SYNCED_PRICE: 7,
 } as const
 
 export const HEADERS_ACC = [
-  'CATEGORÍA', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO',
+  'CATEGORÍA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO',
   '_accessory_id', '_last_synced_name', '_last_synced_price',
 ]
 
@@ -383,15 +389,14 @@ export function rowRangeAcc(title: string, startRow1: number, endRow1: number): 
 
 const VISIBLE_COLS_ACC = { startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.PRECIO + 1 }
 
-// Protege CATEGORÍA y PRECIO — solo DESCRIPCIÓN/CANTIDAD quedan libres para
-// el personal (mismo criterio que Pisos: precio protegido, nombre+cantidad
-// editables).
+// Protege CATEGORÍA/SKU/DESCRIPCIÓN y PRECIO — solo CANTIDAD queda libre
+// para el personal.
 export function buildAccessoryProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
   return [
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.CATEGORIA + 1 },
-      description: 'CATEGORÍA - solo lectura', warningOnly: false, editors,
+      range: { sheetId, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.DESCRIPCION + 1 },
+      description: 'CATEGORÍA/SKU/DESCRIPCIÓN - solo lectura', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startColumnIndex: COL_ACC.PRECIO, endColumnIndex: COL_ACC.PRECIO + 1 },
@@ -406,6 +411,19 @@ export function buildAccessoryProtectionRequests(sheetId: number, serviceAccount
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
   ]
+}
+
+// Quita/rehace la combinación de celdas de CATEGORÍA — mismo patrón que
+// buildUnmergeRequest/buildMergeRequest para FORMATO en Pisos.
+export function buildAccessoryUnmergeRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { unmergeCells: { range: { sheetId, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.CATEGORIA + 1 } } }
+}
+
+export function buildAccessoryMergeRequest(sheetId: number, startRow0: number, endRow0: number): sheets_v4.Schema$Request {
+  return { mergeCells: {
+    range: { sheetId, startRowIndex: startRow0, endRowIndex: endRow0, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.CATEGORIA + 1 },
+    mergeType: 'MERGE_ALL',
+  } }
 }
 
 export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request {
@@ -447,6 +465,13 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
       cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '"$"#,##0.00' } } },
       fields: 'userEnteredFormat.numberFormat',
     } },
+    { repeatCell: {
+      // Igual que FORMATO en Pisos: centrado, para que se vea bien como
+      // bloque grande fusionado (Adhesivo/Boquilla).
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.CATEGORIA + 1 },
+      cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true } } },
+      fields: 'userEnteredFormat(horizontalAlignment,textFormat)',
+    } },
     { updateBorders: {
       range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_ACC },
       top: style, bottom: style, left: style, right: style, innerHorizontal: style, innerVertical: style,
@@ -454,6 +479,11 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
     { setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_ACC } } } },
     { updateDimensionProperties: {
       range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.CATEGORIA, endIndex: COL_ACC.CATEGORIA + 1 },
+      properties: { pixelSize: 130 },
+      fields: 'pixelSize',
+    } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.SKU, endIndex: COL_ACC.SKU + 1 },
       properties: { pixelSize: 110 },
       fields: 'pixelSize',
     } },

@@ -32,7 +32,7 @@ export default async function AccesorioDetailPage({ params }: { params: Promise<
           <BackButton fallbackHref="/complementos" />
           <div>
             <h1>{acc.name}</h1>
-            <p>{getCategoryLabel(acc.category)}</p>
+            <p>{getCategoryLabel(acc.category)}{acc.sku ? ` · SKU: ${acc.sku}` : ''}</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
