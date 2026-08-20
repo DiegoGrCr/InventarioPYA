@@ -206,12 +206,25 @@ export function buildProtectionRequests(sheetId: number, serviceAccountEmail: st
   ]
 }
 
-export function buildHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request {
-  return { updateDimensionProperties: {
-    range: { sheetId, dimension: 'COLUMNS', startIndex: COL.PRODUCT_ID, endIndex: COL.LAST_SYNCED_PRICE + 1 },
-    properties: { hiddenByUser: true },
-    fields: 'hiddenByUser',
-  } }
+// Devuelve 2 requests: ocultar las columnas internas Y des-ocultar
+// explícitamente las visibles. Sin el segundo, si el layout cambia (ej. se
+// inserta una columna nueva) una columna que antes caía en el rango oculto
+// puede terminar coincidiendo con una columna visible del nuevo layout — la
+// bandera "oculta" es una propiedad de la posición física de la columna, no
+// se limpia sola solo porque el significado de esa columna cambió.
+export function buildHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request[] {
+  return [
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL.FORMATO, endIndex: COL.PRODUCT_ID },
+      properties: { hiddenByUser: false },
+      fields: 'hiddenByUser',
+    } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL.PRODUCT_ID, endIndex: COL.LAST_SYNCED_PRICE + 1 },
+      properties: { hiddenByUser: true },
+      fields: 'hiddenByUser',
+    } },
+  ]
 }
 
 export function buildFreezeHeaderRequest(sheetId: number): sheets_v4.Schema$Request {
@@ -274,6 +287,14 @@ export function buildNumberFormatRequests(sheetId: number): sheets_v4.Schema$Req
     { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL.M2_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
       cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0.00' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      // Explícito en NUMBER (no solo "no tocar") para pisar cualquier formato
+      // de moneda que haya quedado pegado de un layout anterior, cuando esta
+      // posición física de columna solía ser PRECIO antes de insertar SKU.
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
       fields: 'userEnteredFormat.numberFormat',
     } },
     { repeatCell: {
@@ -426,12 +447,19 @@ export function buildAccessoryMergeRequest(sheetId: number, startRow0: number, e
   } }
 }
 
-export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request {
-  return { updateDimensionProperties: {
-    range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.ACCESSORY_ID, endIndex: COL_ACC.LAST_SYNCED_PRICE + 1 },
-    properties: { hiddenByUser: true },
-    fields: 'hiddenByUser',
-  } }
+export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request[] {
+  return [
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.CATEGORIA, endIndex: COL_ACC.ACCESSORY_ID },
+      properties: { hiddenByUser: false },
+      fields: 'hiddenByUser',
+    } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.ACCESSORY_ID, endIndex: COL_ACC.LAST_SYNCED_PRICE + 1 },
+      properties: { hiddenByUser: true },
+      fields: 'hiddenByUser',
+    } },
+  ]
 }
 
 export function buildAccessoryZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
@@ -467,6 +495,13 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
     { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.PRECIO, endColumnIndex: COL_ACC.PRECIO + 1 },
       cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '"$"#,##0.00' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      // Explícito en NUMBER para pisar cualquier formato de moneda heredado
+      // de cuando esta columna física solía ser PRECIO (antes de insertar SKU).
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.CANTIDAD, endColumnIndex: COL_ACC.CANTIDAD + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
       fields: 'userEnteredFormat.numberFormat',
     } },
     { repeatCell: {
@@ -573,12 +608,19 @@ export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail
   ]
 }
 
-export function buildMeshHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request {
-  return { updateDimensionProperties: {
-    range: { sheetId, dimension: 'COLUMNS', startIndex: COL_MESH.MESH_ID, endIndex: COL_MESH.LAST_SYNCED_PRICE + 1 },
-    properties: { hiddenByUser: true },
-    fields: 'hiddenByUser',
-  } }
+export function buildMeshHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request[] {
+  return [
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_MESH.MARCA, endIndex: COL_MESH.MESH_ID },
+      properties: { hiddenByUser: false },
+      fields: 'hiddenByUser',
+    } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_MESH.MESH_ID, endIndex: COL_MESH.LAST_SYNCED_PRICE + 1 },
+      properties: { hiddenByUser: true },
+      fields: 'hiddenByUser',
+    } },
+  ]
 }
 
 export function buildMeshZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
@@ -615,6 +657,13 @@ export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Sch
     { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.M2_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
       cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0.00' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      // Explícito en NUMBER para pisar cualquier formato de moneda heredado
+      // de cuando esta columna física solía ser PRECIO (antes de insertar SKU).
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
       fields: 'userEnteredFormat.numberFormat',
     } },
     { repeatCell: {

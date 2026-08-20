@@ -266,11 +266,11 @@ async function reconcileMeshBodega(
       structural.push(...buildClearProtectionsAndFormatsRequests(sheetId!, protectedRangeIds, conditionalFormatCount))
     }
     structural.push(...buildMeshProtectionRequests(sheetId!, serviceAccountEmail))
-    structural.push(buildMeshHideColumnsRequest(sheetId!))
     structural.push(buildFreezeHeaderRequest(sheetId!))
     structural.push(buildMeshZeroStockHighlightRequest(sheetId!))
     writes.push({ range: rowRangeMesh(MESH_TAB_NAME, 1, 1), values: [HEADERS_MESH] })
   }
+  structural.push(...buildMeshHideColumnsRequest(sheetId!))
   structural.push(...buildMeshRepeatableStyleRequests(sheetId!))
 
   if (structurallyDifferent) {

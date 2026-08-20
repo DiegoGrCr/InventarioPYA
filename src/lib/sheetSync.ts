@@ -355,14 +355,15 @@ async function reconcileBodega(
         structural.push(...buildClearProtectionsAndFormatsRequests(sheetId, protectedRangeIds, conditionalFormatCount))
       }
       structural.push(...buildProtectionRequests(sheetId, serviceAccountEmail))
-      structural.push(buildHideColumnsRequest(sheetId))
       structural.push(buildFreezeHeaderRequest(sheetId))
       structural.push(buildZeroStockHighlightRequest(sheetId))
       writes.push({ range: rowRange(title, 1, 1), values: [HEADERS] })
     }
-    // El formato visual (colores, bordes, moneda, anchos, filtro) es idempotente
-    // — se reaplica en cada corrida para que las pestañas ya existentes también
-    // queden con el mismo estilo, no solo las nuevas.
+    // El formato visual (colores, bordes, moneda, anchos, filtro) y qué
+    // columnas están ocultas son idempotentes — se reaplican en cada corrida
+    // para que las pestañas ya existentes también se autocorrijan (ej. si el
+    // layout cambió y una columna visible había quedado oculta por accidente).
+    structural.push(...buildHideColumnsRequest(sheetId))
     structural.push(...buildRepeatableStyleRequests(sheetId))
 
     if (structurallyDifferent) {

@@ -284,11 +284,11 @@ async function reconcileAccessoryBodega(
       structural.push(...buildClearProtectionsAndFormatsRequests(sheetId!, protectedRangeIds, conditionalFormatCount))
     }
     structural.push(...buildAccessoryProtectionRequests(sheetId!, serviceAccountEmail))
-    structural.push(buildAccessoryHideColumnsRequest(sheetId!))
     structural.push(buildFreezeHeaderRequest(sheetId!))
     structural.push(buildAccessoryZeroStockHighlightRequest(sheetId!))
     writes.push({ range: rowRangeAcc(ACCESSORY_TAB_NAME, 1, 1), values: [HEADERS_ACC] })
   }
+  structural.push(...buildAccessoryHideColumnsRequest(sheetId!))
   structural.push(...buildAccessoryRepeatableStyleRequests(sheetId!))
 
   if (structurallyDifferent) {
