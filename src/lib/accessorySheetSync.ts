@@ -83,6 +83,7 @@ interface ParsedAccessoryRow {
   stockInvalid: boolean
   trackedName: string
   trackedPrice: number | null
+  trackedCategory: string
 }
 
 function cellRaw(v: CellValue | undefined): string {
@@ -126,6 +127,7 @@ function parseAccessoryTabRows(rows: CellValue[][]): ParsedAccessoryRow[] {
       stockInvalid,
       trackedName: cellRaw(r[COL_ACC.LAST_SYNCED_NAME]),
       trackedPrice: cellNum(r[COL_ACC.LAST_SYNCED_PRICE]),
+      trackedCategory: cellRaw(r[COL_ACC.LAST_SYNCED_CATEGORY]),
     })
   }
   return out
@@ -222,10 +224,13 @@ async function applyAccessoryPulls(
 // -------- Fase B: reconciliar la pestaña contra los datos ya actualizados --------
 
 function buildAccessoryTabContentValues(rows: AccessoryMasterRow[]): (string | number)[][] {
-  return sortAccessoryRows(rows).map(it => [
-    it.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla', it.sku ?? '', it.name, it.stock, it.precio ?? '',
-    it.accessoryId, it.name, it.precio ?? '',
-  ])
+  return sortAccessoryRows(rows).map(it => {
+    const categoryLabel = it.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla'
+    return [
+      categoryLabel, it.sku ?? '', it.name, it.stock, it.precio ?? '',
+      it.accessoryId, it.name, it.precio ?? '', categoryLabel,
+    ]
+  })
 }
 
 // Combina en un solo bloque grande las celdas de CATEGORÍA de cada grupo
@@ -267,7 +272,18 @@ async function reconcileAccessoryBodega(
 
   const desiredIds = new Set(freshRows.map(r => r.accessoryId))
   const actualIds = new Set(actualRows.map(r => r.accessoryId))
-  const structurallyDifferent = isNewTab || desiredIds.size !== actualIds.size || [...desiredIds].some(id => !actualIds.has(id))
+  const byIdFresh = new Map(freshRows.map(r => [r.accessoryId, r]))
+  // CATEGORÍA está protegida/fusionada — no se detecta como "editada por el
+  // personal" en la Fase A. Si alguien la cambió desde la app, la única forma
+  // de que la fila se mueva al bloque fusionado correcto es una reconstrucción
+  // completa, así que un cambio de categoría también cuenta como estructural.
+  const categoryChanged = actualRows.some(row => {
+    const fresh = byIdFresh.get(row.accessoryId)
+    if (!fresh) return false
+    const label = fresh.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla'
+    return row.trackedCategory !== label
+  })
+  const structurallyDifferent = isNewTab || desiredIds.size !== actualIds.size || [...desiredIds].some(id => !actualIds.has(id)) || categoryChanged
 
   if (structurallyDifferent && !allowStructural) {
     return { bodega: config.bodega, rebuilt: false, cellsWritten: 0, needsReview: true }

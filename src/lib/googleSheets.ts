@@ -393,11 +393,16 @@ export const COL_ACC = {
   ACCESSORY_ID: 5,
   LAST_SYNCED_NAME: 6,
   LAST_SYNCED_PRICE: 7,
+  // Solo para detectar que la categoría de un accesorio cambió desde la app
+  // (CATEGORÍA está protegida/fusionada, no se lee de vuelta como cambio de
+  // staff) — dispara una reconstrucción completa para que la fila se mueva
+  // al bloque fusionado correcto.
+  LAST_SYNCED_CATEGORY: 8,
 } as const
 
 export const HEADERS_ACC = [
   'CATEGORÍA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO',
-  '_accessory_id', '_last_synced_name', '_last_synced_price',
+  '_accessory_id', '_last_synced_name', '_last_synced_price', '_last_synced_category',
 ]
 
 export const ACCESSORY_TAB_NAME = 'Adhesivos'
@@ -405,7 +410,7 @@ export const ACCESSORY_TAB_NAME = 'Adhesivos'
 // Gemelo de rowRange() para el layout de Adhesivos — rowRange() hardcodea la
 // columna final en COL.LAST_SYNCED_PRICE (propia de Pisos, columna I).
 export function rowRangeAcc(title: string, startRow1: number, endRow1: number): string {
-  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_ACC.LAST_SYNCED_PRICE)}${endRow1}`
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_ACC.LAST_SYNCED_CATEGORY)}${endRow1}`
 }
 
 const VISIBLE_COLS_ACC = { startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.PRECIO + 1 }
@@ -424,7 +429,7 @@ export function buildAccessoryProtectionRequests(sheetId: number, serviceAccount
       description: 'PRECIO - solo lectura', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_ACC.ACCESSORY_ID, endColumnIndex: COL_ACC.LAST_SYNCED_PRICE + 1 },
+      range: { sheetId, startColumnIndex: COL_ACC.ACCESSORY_ID, endColumnIndex: COL_ACC.LAST_SYNCED_CATEGORY + 1 },
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
@@ -455,7 +460,7 @@ export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Sch
       fields: 'hiddenByUser',
     } },
     { updateDimensionProperties: {
-      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.ACCESSORY_ID, endIndex: COL_ACC.LAST_SYNCED_PRICE + 1 },
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.ACCESSORY_ID, endIndex: COL_ACC.LAST_SYNCED_CATEGORY + 1 },
       properties: { hiddenByUser: true },
       fields: 'hiddenByUser',
     } },
