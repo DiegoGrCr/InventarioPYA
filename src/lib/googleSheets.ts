@@ -320,7 +320,7 @@ export function buildNumberFormatRequests(sheetId: number): sheets_v4.Schema$Req
     } },
     { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL.PRECIO, endColumnIndex: COL.PRECIO + 1 },
-      cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '"$"#,##0.00' } } },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '"$"#,##0.##' } } },
       fields: 'userEnteredFormat.numberFormat',
     } },
     { repeatCell: {
@@ -371,10 +371,11 @@ export function buildZeroStockHighlightRequest(sheetId: number): sheets_v4.Schem
       booleanRule: {
         // En Sheets una celda vacía cuenta como 0, así que sin el chequeo de
         // que la fila tenga un _product_id real, TODAS las filas vacías de
-        // abajo (hasta STYLE_LAST_ROW) también se pintarían de rojo. Usa ";"
-        // como separador de argumentos (no ",") porque las hojas están en
-        // locale español, donde AND(a,b) con coma no es válido.
-        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL.PRODUCT_ID)}2<>"";$${colLetter(COL.CAJAS_EN_EXISTENCIA)}2=0)` }] },
+        // abajo (hasta STYLE_LAST_ROW) también se pintarían de rojo. El
+        // separador de argumentos depende del locale del archivo (es_MX usa
+        // punto decimal, así que la coma SÍ es válida como separador aquí —
+        // a diferencia de cuando el archivo estaba en es_ES).
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL.PRODUCT_ID)}2<>"",$${colLetter(COL.CAJAS_EN_EXISTENCIA)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
       },
     },
@@ -507,7 +508,7 @@ export function buildAccessoryZeroStockHighlightRequest(sheetId: number): sheets
       // en 0, pintaría el bloque entero de rojo aunque el resto sí tenga stock.
       ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 }],
       booleanRule: {
-        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"";$${colLetter(COL_ACC.CANTIDAD)}2=0)` }] },
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"",$${colLetter(COL_ACC.CANTIDAD)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
       },
     },
@@ -530,7 +531,7 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
     } },
     { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.PRECIO, endColumnIndex: COL_ACC.PRECIO + 1 },
-      cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '"$"#,##0.00' } } },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '"$"#,##0.##' } } },
       fields: 'userEnteredFormat.numberFormat',
     } },
     { repeatCell: {
@@ -675,7 +676,7 @@ export function buildMeshZeroStockHighlightRequest(sheetId: number): sheets_v4.S
     rule: {
       ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_MESH }],
       booleanRule: {
-        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_MESH.MESH_ID)}2<>"";$${colLetter(COL_MESH.CAJAS_EN_EXISTENCIA)}2=0)` }] },
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_MESH.MESH_ID)}2<>"",$${colLetter(COL_MESH.CAJAS_EN_EXISTENCIA)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
       },
     },
@@ -723,7 +724,7 @@ export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Sch
     } },
     { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.PRECIO, endColumnIndex: COL_MESH.PRECIO + 1 },
-      cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '"$"#,##0.00' } } },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '"$"#,##0.##' } } },
       fields: 'userEnteredFormat.numberFormat',
     } },
     { updateBorders: {
