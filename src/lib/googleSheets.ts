@@ -298,6 +298,14 @@ export function buildHeaderStyleRequest(sheetId: number): sheets_v4.Schema$Reque
 export function buildNumberFormatRequests(sheetId: number): sheets_v4.Schema$Request[] {
   return [
     { repeatCell: {
+      // Explícito en NUMBER plano para pisar cualquier formato decimal
+      // heredado de cuando esta posición física de columna solía ser
+      // M² X CAJA (antes de insertar SKU) — PIEZAS X CAJA es entero.
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL.PIEZAS_X_CAJA, endColumnIndex: COL.PIEZAS_X_CAJA + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL.M2_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
       cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0.00' } } },
       fields: 'userEnteredFormat.numberFormat',
@@ -692,6 +700,14 @@ export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Sch
         verticalAlignment: 'MIDDLE',
       } },
       fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+    } },
+    { repeatCell: {
+      // Explícito en NUMBER plano para pisar cualquier formato decimal
+      // heredado de cuando esta posición física de columna solía ser
+      // M² X CAJA (antes de insertar SKU) — PIEZAS X CAJA es entero.
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.PIEZAS_X_CAJA, endColumnIndex: COL_MESH.PIEZAS_X_CAJA + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
+      fields: 'userEnteredFormat.numberFormat',
     } },
     { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.M2_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
