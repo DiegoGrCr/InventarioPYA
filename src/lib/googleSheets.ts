@@ -203,6 +203,19 @@ export function buildProtectionRequests(sheetId: number, serviceAccountEmail: st
       range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL.FORMATO, endColumnIndex: COL.PRECIO + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
+    // Protección de la PESTAÑA completa (range sin límites = toda la hoja) —
+    // a diferencia de las protecciones de arriba (que solo bloquean editar
+    // celdas puntuales), esta también evita que alguien sin permiso borre,
+    // renombre o mueva la pestaña. unprotectedRanges dentro de esta misma
+    // protección deja libres exactamente las mismas celdas de siempre.
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId },
+      unprotectedRanges: [
+        { sheetId, startRowIndex: 1, startColumnIndex: COL.DESCRIPCION, endColumnIndex: COL.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
+      ],
+      description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
+    } } },
   ]
 }
 
@@ -436,6 +449,16 @@ export function buildAccessoryProtectionRequests(sheetId: number, serviceAccount
       range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.PRECIO + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
+    // Protección de la PESTAÑA completa — ver el equivalente de Pisos
+    // (buildProtectionRequests). Aquí solo CANTIDAD queda libre, ni siquiera
+    // DESCRIPCIÓN (decisión explícita: en Adhesivos solo se reporta cantidad).
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId },
+      unprotectedRanges: [
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.CANTIDAD, endColumnIndex: COL_ACC.CANTIDAD + 1 },
+      ],
+      description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
+    } } },
   ]
 }
 
@@ -609,6 +632,17 @@ export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.PRECIO + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
+    } } },
+    // Protección de la PESTAÑA completa — ver el equivalente de Pisos
+    // (buildProtectionRequests) para la explicación de por qué es distinta
+    // de proteger solo celdas puntuales.
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId },
+      unprotectedRanges: [
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.DESCRIPCION, endColumnIndex: COL_MESH.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA + 1 },
+      ],
+      description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
     } } },
   ]
 }
