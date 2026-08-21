@@ -8,7 +8,7 @@ import {
   buildFreezeHeaderRequest, buildUnmergeRequest, buildMergeRequest, cellRange, rowRange,
   buildRepeatableStyleRequests, buildZeroStockHighlightRequest,
   getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
-  COL, HEADERS, TabInfo, CellValue,
+  COL, HEADERS, TabInfo, CellValue, MESH_TAB_NAME, ACCESSORY_TAB_NAME,
 } from './googleSheets'
 import { syncAccessoriesForBodegas, AccessoryBodegaResult } from './accessorySheetSync'
 import { syncMeshesForBodegas, MeshBodegaResult } from './meshSheetSync'
@@ -402,6 +402,29 @@ async function reconcileBodega(
         }
       }
     }
+  }
+
+  // Limpia pestañas de marca huérfanas: tenían contenido sincronizado pero
+  // esa marca ya no tiene ningún producto vigente en esta bodega (se quitó/
+  // desactivó el último) — el bucle de arriba solo revisita marcas que SÍ
+  // aparecen en freshRows, así que sin esto se quedarían con datos viejos
+  // para siempre. oldRows.length > 0 es la señal de que el sync sí la
+  // manejó alguna vez (una pestaña ajena como "Hoja 1" nunca tiene filas
+  // que calcen con el layout esperado, así que no se toca).
+  const managedTitles = new Set(titleByBrand.values())
+  for (const tab of tabs) {
+    // MESH_TAB_NAME/ACCESSORY_TAB_NAME tienen su propio layout de columnas,
+    // completamente distinto al de Pisos (COL) — parseTabRows() las lee con
+    // los índices EQUIVOCADOS y puede "detectar" una fila falsa ahí (ej. un
+    // precio de adhesivo leído por accidente en la posición de _product_id).
+    // Sin esta exclusión, esto las marcaba como huérfanas y las vaciaba,
+    // justo antes de que su propio sync (accessorySheetSync/meshSheetSync)
+    // fuera a leerlas — pudiendo perder una edición reciente del personal.
+    if (tab.title === MESH_TAB_NAME || tab.title === ACCESSORY_TAB_NAME) continue
+    if (managedTitles.has(tab.title) || toClear.includes(tab.title)) continue
+    const oldRows = rowsByTab.get(tab.title) || []
+    if (oldRows.length === 0) continue
+    toClear.push(tab.title)
   }
 
   console.log(`[sync ${invocationId}] write bodega=${config.bodega} spreadsheetId=${config.spreadsheetId} rebuiltTabs=${JSON.stringify(rebuiltTabs)} toClear=${JSON.stringify(toClear)} writes=${writes.length}`)
