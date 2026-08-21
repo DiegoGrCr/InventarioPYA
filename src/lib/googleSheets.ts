@@ -289,8 +289,23 @@ export function buildHeaderStyleRequest(sheetId: number): sheets_v4.Schema$Reque
       textFormat: { bold: true, foregroundColor: hexToRgb(COLORS.headerText) },
       horizontalAlignment: 'CENTER',
       verticalAlignment: 'MIDDLE',
+      // Encabezados largos (ej. "CAJAS EN EXISTENCIA") no caben en columnas
+      // angostas pensadas para el dato, no para el título — en vez de
+      // ensanchar cada columna al ancho del título más largo, se envuelve en
+      // 2 líneas dentro de la misma celda.
+      wrapStrategy: 'WRAP',
     } },
-    fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+    fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)',
+  } }
+}
+
+// Encabezados envueltos en 2 líneas necesitan más alto que la fila por
+// defecto (~21px) para no verse cortados — aplica a cualquier tipo de hoja.
+export function buildHeaderRowHeightRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { updateDimensionProperties: {
+    range: { sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+    properties: { pixelSize: 42 },
+    fields: 'pixelSize',
   } }
 }
 
@@ -389,6 +404,7 @@ export function buildZeroStockHighlightRequest(sheetId: number): sheets_v4.Schem
 export function buildRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$Request[] {
   return [
     buildHeaderStyleRequest(sheetId),
+    buildHeaderRowHeightRequest(sheetId),
     ...buildNumberFormatRequests(sheetId),
     buildBorderRequest(sheetId),
     buildFilterRequest(sheetId),
@@ -526,9 +542,11 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
         textFormat: { bold: true, foregroundColor: hexToRgb(COLORS.headerText) },
         horizontalAlignment: 'CENTER',
         verticalAlignment: 'MIDDLE',
+        wrapStrategy: 'WRAP',
       } },
-      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)',
     } },
+    buildHeaderRowHeightRequest(sheetId),
     { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.PRECIO, endColumnIndex: COL_ACC.PRECIO + 1 },
       cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '"$"#,##0.##' } } },
@@ -699,9 +717,11 @@ export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Sch
         textFormat: { bold: true, foregroundColor: hexToRgb(COLORS.headerText) },
         horizontalAlignment: 'CENTER',
         verticalAlignment: 'MIDDLE',
+        wrapStrategy: 'WRAP',
       } },
-      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)',
     } },
+    buildHeaderRowHeightRequest(sheetId),
     { repeatCell: {
       // Explícito en NUMBER plano para pisar cualquier formato decimal
       // heredado de cuando esta posición física de columna solía ser
