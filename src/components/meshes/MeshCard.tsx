@@ -54,9 +54,13 @@ export default function MeshCard({ mesh, priority = false }: { mesh: Mesh; prior
       </div>
       <div className="card-footer">
         <span style={{ fontWeight: 700, fontSize: '15px' }}>
-          {mesh.price_per_sqm
-            ? <>{formatPrice(mesh.price_per_sqm)}<span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400 }}> /m²</span></>
-            : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Sin precio</span>
+          {mesh.sale_unit === 'pieza'
+            ? (mesh.price_per_box
+                ? <>{formatPrice(mesh.price_per_box)}<span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400 }}> /pieza</span></>
+                : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Sin precio</span>)
+            : (mesh.price_per_sqm
+                ? <>{formatPrice(mesh.price_per_sqm)}<span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400 }}> /m²</span></>
+                : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Sin precio</span>)
           }
         </span>
         <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>

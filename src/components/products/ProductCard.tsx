@@ -58,9 +58,13 @@ export default function ProductCard({ product, priority = false }: { product: Pr
       </div>
       <div className="card-footer">
         <span style={{ fontWeight: 700, fontSize: '15px' }}>
-          {product.price_per_sqm
-            ? <>{formatPrice(product.price_per_sqm)}<span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400 }}> /m²</span></>
-            : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Sin precio</span>
+          {product.sale_unit === 'pieza'
+            ? (product.price_per_box
+                ? <>{formatPrice(product.price_per_box)}<span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400 }}> /pieza</span></>
+                : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Sin precio</span>)
+            : (product.price_per_sqm
+                ? <>{formatPrice(product.price_per_sqm)}<span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400 }}> /m²</span></>
+                : <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Sin precio</span>)
           }
         </span>
         <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
