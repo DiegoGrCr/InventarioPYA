@@ -16,36 +16,45 @@ const BRAND_LOGOS: Record<string, string> = {
 export default async function HomePage() {
   const supabase = await createServerSupabaseClient()
 
-  const [pisosRes, mallasRes, banosRes, accRes, brandsRes] = await Promise.all([
+  const [pisosRes, mallasRes, banosRes, accRes, brandsRes, pisosTotalRes, mallasTotalRes, banosTotalRes, accTotalRes] = await Promise.all([
     supabase
       .from('products')
-      .select('id, name, image_url, size:sizes(label)', { count: 'exact' })
+      .select('id, name, image_url, size:sizes(label)')
       .eq('is_active', true)
       .not('image_url', 'is', null)
       .order('created_at', { ascending: false })
       .limit(14),
     supabase
       .from('meshes')
-      .select('id, name, image_url, size:sizes(label)', { count: 'exact' })
+      .select('id, name, image_url, size:sizes(label)')
       .eq('is_active', true)
       .not('image_url', 'is', null)
       .order('created_at', { ascending: false })
       .limit(14),
     supabase
       .from('bano_products')
-      .select('id, name, image_url, brand', { count: 'exact' })
+      .select('id, name, image_url, brand')
       .eq('is_active', true)
       .not('image_url', 'is', null)
       .order('created_at', { ascending: false })
       .limit(14),
     supabase
       .from('accessories')
-      .select('id, name, image_url, category', { count: 'exact' })
+      .select('id, name, image_url, category')
       .eq('is_active', true)
       .not('image_url', 'is', null)
       .order('created_at', { ascending: false })
       .limit(14),
     supabase.from('brands').select('id, name').order('name'),
+    // Conteos del catálogo REAL (sin exigir foto) — separados de la consulta
+    // de arriba, que solo trae los productos CON imagen para las tarjetas/
+    // carrusel. Antes el conteo mostrado en el home venía de esa misma
+    // consulta filtrada, así que un catálogo sin fotos aún (ej. Mallas
+    // recién lanzado) se veía con "0" aunque sí tuviera productos reales.
+    supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true),
+    supabase.from('meshes').select('id', { count: 'exact', head: true }).eq('is_active', true),
+    supabase.from('bano_products').select('id', { count: 'exact', head: true }).eq('is_active', true),
+    supabase.from('accessories').select('id', { count: 'exact', head: true }).eq('is_active', true),
   ])
 
   const pisos = pisosRes.data || []
@@ -56,10 +65,10 @@ export default async function HomePage() {
     .map(b => ({ ...b, logo: BRAND_LOGOS[b.name.toLowerCase()] }))
     .filter(b => b.logo)
 
-  const pisosCount = pisosRes.count || 0
-  const mallasCount = mallasRes.count || 0
-  const banosCount = banosRes.count || 0
-  const accCount = accRes.count || 0
+  const pisosCount = pisosTotalRes.count || 0
+  const mallasCount = mallasTotalRes.count || 0
+  const banosCount = banosTotalRes.count || 0
+  const accCount = accTotalRes.count || 0
 
   // Duplicamos la lista para lograr un loop infinito sin saltos
   const pisosLoop = pisos.length > 0 ? [...pisos, ...pisos] : []
