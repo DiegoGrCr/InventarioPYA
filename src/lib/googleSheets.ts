@@ -424,22 +424,23 @@ export function buildRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$
 
 export const COL_ACC = {
   CATEGORIA: 0,
-  SKU: 1,
-  DESCRIPCION: 2,
-  CANTIDAD: 3,
-  PRECIO: 4,
-  ACCESSORY_ID: 5,
-  LAST_SYNCED_NAME: 6,
-  LAST_SYNCED_PRICE: 7,
+  MARCA: 1,
+  SKU: 2,
+  DESCRIPCION: 3,
+  CANTIDAD: 4,
+  PRECIO: 5,
+  ACCESSORY_ID: 6,
+  LAST_SYNCED_NAME: 7,
+  LAST_SYNCED_PRICE: 8,
   // Solo para detectar que la categoría de un accesorio cambió desde la app
   // (CATEGORÍA está protegida/fusionada, no se lee de vuelta como cambio de
   // staff) — dispara una reconstrucción completa para que la fila se mueva
   // al bloque fusionado correcto.
-  LAST_SYNCED_CATEGORY: 8,
+  LAST_SYNCED_CATEGORY: 9,
 } as const
 
 export const HEADERS_ACC = [
-  'CATEGORÍA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO',
+  'CATEGORÍA', 'MARCA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO',
   '_accessory_id', '_last_synced_name', '_last_synced_price', '_last_synced_category',
 ]
 
@@ -460,7 +461,7 @@ export function buildAccessoryProtectionRequests(sheetId: number, serviceAccount
   return [
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.DESCRIPCION + 1 },
-      description: 'CATEGORÍA/SKU/DESCRIPCIÓN - solo lectura', warningOnly: false, editors,
+      description: 'CATEGORÍA/MARCA/SKU/DESCRIPCIÓN - solo lectura', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startColumnIndex: COL_ACC.PRECIO, endColumnIndex: COL_ACC.PRECIO + 1 },
@@ -518,11 +519,13 @@ export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Sch
 export function buildAccessoryZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
   return { addConditionalFormatRule: {
     rule: {
-      // OJO: arranca en SKU, no en CATEGORÍA — CATEGORÍA está fusionada en
+      // OJO: arranca en MARCA, no en CATEGORÍA — CATEGORÍA está fusionada en
       // bloques grandes (Adhesivo/Boquilla) y una fórmula por-fila no se
       // puede pintar de forma sensata ahí: si UNA fila del bloque tiene stock
       // en 0, pintaría el bloque entero de rojo aunque el resto sí tenga stock.
-      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 }],
+      // MARCA sí es una celda normal por fila (no fusionada), así que puede
+      // entrar en el rango igual que SKU/DESCRIPCIÓN/PRECIO.
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.MARCA, endColumnIndex: COL_ACC.PRECIO + 1 }],
       booleanRule: {
         condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"",$${colLetter(COL_ACC.CANTIDAD)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
@@ -574,6 +577,11 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
     { updateDimensionProperties: {
       range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.CATEGORIA, endIndex: COL_ACC.CATEGORIA + 1 },
       properties: { pixelSize: 130 },
+      fields: 'pixelSize',
+    } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.MARCA, endIndex: COL_ACC.MARCA + 1 },
+      properties: { pixelSize: 110 },
       fields: 'pixelSize',
     } },
     { updateDimensionProperties: {
@@ -752,6 +760,160 @@ export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Sch
       top: style, bottom: style, left: style, right: style, innerHorizontal: style, innerVertical: style,
     } },
     { setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_MESH } } } },
+    ...widths.map(([index, pixelSize]) => ({
+      updateDimensionProperties: {
+        range: { sheetId, dimension: 'COLUMNS' as const, startIndex: index, endIndex: index + 1 },
+        properties: { pixelSize },
+        fields: 'pixelSize',
+      },
+    })),
+  ]
+}
+
+// ==================== Cenefas (pestaña plana, sin agrupar por marca) ====================
+// Mismo layout que Mallas — mismos campos que Pisos (formato, piezas/caja,
+// m²/caja, precio) en una sola pestaña plana con columna MARCA visible.
+
+export const COL_CENEFA = {
+  MARCA: 0,
+  FORMATO: 1,
+  SKU: 2,
+  DESCRIPCION: 3,
+  PIEZAS_X_CAJA: 4,
+  M2_X_CAJA: 5,
+  CAJAS_EN_EXISTENCIA: 6,
+  PRECIO: 7,
+  CENEFA_ID: 8,
+  LAST_SYNCED_NAME: 9,
+  LAST_SYNCED_PRICE: 10,
+} as const
+
+export const HEADERS_CENEFA = [
+  'MARCA', 'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
+  '_cenefa_id', '_last_synced_name', '_last_synced_price',
+]
+
+export const CENEFA_TAB_NAME = 'Cenefas'
+
+export function rowRangeCenefa(title: string, startRow1: number, endRow1: number): string {
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_CENEFA.LAST_SYNCED_PRICE)}${endRow1}`
+}
+
+const VISIBLE_COLS_CENEFA = { startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.PRECIO + 1 }
+
+// Protege MARCA+FORMATO+SKU, PIEZAS/M2, PRECIO, la fila de encabezados y las
+// columnas ocultas — solo DESCRIPCIÓN/CAJAS EN EXISTENCIA quedan libres para
+// el personal (mismo criterio que Pisos/Mallas).
+export function buildCenefaProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
+  const editors = { users: [serviceAccountEmail] }
+  return [
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.SKU + 1 },
+      description: 'MARCA/FORMATO/SKU - solo lectura', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_CENEFA.PIEZAS_X_CAJA, endColumnIndex: COL_CENEFA.M2_X_CAJA + 1 },
+      description: 'PIEZAS/M2 - solo lectura', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_CENEFA.PRECIO, endColumnIndex: COL_CENEFA.PRECIO + 1 },
+      description: 'PRECIO - solo lectura', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_CENEFA.CENEFA_ID, endColumnIndex: COL_CENEFA.LAST_SYNCED_PRICE + 1 },
+      description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.PRECIO + 1 },
+      description: 'Encabezados - solo lectura', warningOnly: false, editors,
+    } } },
+    // Protección de la PESTAÑA completa — ver el equivalente de Pisos
+    // (buildProtectionRequests) para la explicación de por qué es distinta
+    // de proteger solo celdas puntuales.
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId },
+      unprotectedRanges: [
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.DESCRIPCION, endColumnIndex: COL_CENEFA.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA + 1 },
+      ],
+      description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
+    } } },
+  ]
+}
+
+export function buildCenefaHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request[] {
+  return [
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_CENEFA.MARCA, endIndex: COL_CENEFA.CENEFA_ID },
+      properties: { hiddenByUser: false },
+      fields: 'hiddenByUser',
+    } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_CENEFA.CENEFA_ID, endIndex: COL_CENEFA.LAST_SYNCED_PRICE + 1 },
+      properties: { hiddenByUser: true },
+      fields: 'hiddenByUser',
+    } },
+  ]
+}
+
+export function buildCenefaZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { addConditionalFormatRule: {
+    rule: {
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_CENEFA }],
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_CENEFA.CENEFA_ID)}2<>"",$${colLetter(COL_CENEFA.CAJAS_EN_EXISTENCIA)}2=0)` }] },
+        format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
+      },
+    },
+    index: 0,
+  } }
+}
+
+export function buildCenefaRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$Request[] {
+  const style = { style: 'SOLID' as const, color: hexToRgb(COLORS.border) }
+  const widths: [number, number][] = [
+    [COL_CENEFA.MARCA, 110], [COL_CENEFA.FORMATO, 80], [COL_CENEFA.SKU, 110], [COL_CENEFA.DESCRIPCION, 220],
+    [COL_CENEFA.PIEZAS_X_CAJA, 100], [COL_CENEFA.M2_X_CAJA, 90], [COL_CENEFA.CAJAS_EN_EXISTENCIA, 150],
+    [COL_CENEFA.PRECIO, 100],
+  ]
+  return [
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, ...VISIBLE_COLS_CENEFA },
+      cell: { userEnteredFormat: {
+        backgroundColor: hexToRgb(COLORS.headerBg),
+        textFormat: { bold: true, foregroundColor: hexToRgb(COLORS.headerText) },
+        horizontalAlignment: 'CENTER',
+        verticalAlignment: 'MIDDLE',
+        wrapStrategy: 'WRAP',
+      } },
+      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)',
+    } },
+    buildHeaderRowHeightRequest(sheetId),
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.PIEZAS_X_CAJA, endColumnIndex: COL_CENEFA.PIEZAS_X_CAJA + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.M2_X_CAJA, endColumnIndex: COL_CENEFA.M2_X_CAJA + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0.00' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.PRECIO, endColumnIndex: COL_CENEFA.PRECIO + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '"$"#,##0.##' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { updateBorders: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_CENEFA },
+      top: style, bottom: style, left: style, right: style, innerHorizontal: style, innerVertical: style,
+    } },
+    { setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_CENEFA } } } },
     ...widths.map(([index, pixelSize]) => ({
       updateDimensionProperties: {
         range: { sheetId, dimension: 'COLUMNS' as const, startIndex: index, endIndex: index + 1 },

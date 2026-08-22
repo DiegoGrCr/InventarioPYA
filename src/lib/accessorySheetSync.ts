@@ -17,6 +17,7 @@ interface AccessoryMasterRow {
   accessoryId: string
   name: string
   category: string
+  brand: string | null
   sku: string | null
   precio: number | null
   stock: number
@@ -29,20 +30,20 @@ async function fetchAccessoryMasterData(supabase: ReturnType<typeof createPlainS
 
   const { data, error } = await supabase
     .from('accessory_bodega_stock')
-    .select('bodega, stock, accessory:accessories!inner(id, name, category, sku, price, is_active)')
+    .select('bodega, stock, accessory:accessories!inner(id, name, category, brand, sku, price, is_active)')
     .in('bodega', bodegas)
     .eq('accessory.is_active', true)
 
   if (error) throw new Error(`Error leyendo accessory_bodega_stock: ${error.message}`)
 
-  interface AccessoryJoin { id: string; name: string; category: string; sku: string | null; price: number | null }
+  interface AccessoryJoin { id: string; name: string; category: string; brand: string | null; sku: string | null; price: number | null }
 
   ;(data || []).forEach(row => {
     const a = row.accessory as unknown as AccessoryJoin | null
     if (!a) return
     const list = result.get(row.bodega)
     if (!list) return
-    list.push({ accessoryId: a.id, name: a.name, category: a.category, sku: a.sku, precio: a.price, stock: row.stock })
+    list.push({ accessoryId: a.id, name: a.name, category: a.category, brand: a.brand, sku: a.sku, precio: a.price, stock: row.stock })
   })
   return result
 }
@@ -227,7 +228,7 @@ function buildAccessoryTabContentValues(rows: AccessoryMasterRow[]): (string | n
   return sortAccessoryRows(rows).map(it => {
     const categoryLabel = it.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla'
     return [
-      categoryLabel, it.sku ?? '', it.name, it.stock, it.precio ?? '',
+      categoryLabel, it.brand || 'Sin marca', it.sku ?? '', it.name, it.stock, it.precio ?? '',
       it.accessoryId, it.name, it.precio ?? '', categoryLabel,
     ]
   })

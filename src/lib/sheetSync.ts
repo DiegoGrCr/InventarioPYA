@@ -8,10 +8,11 @@ import {
   buildFreezeHeaderRequest, buildUnmergeRequest, buildMergeRequest, cellRange, rowRange,
   buildRepeatableStyleRequests, buildZeroStockHighlightRequest,
   getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
-  COL, HEADERS, TabInfo, CellValue, MESH_TAB_NAME, ACCESSORY_TAB_NAME,
+  COL, HEADERS, TabInfo, CellValue, MESH_TAB_NAME, ACCESSORY_TAB_NAME, CENEFA_TAB_NAME,
 } from './googleSheets'
 import { syncAccessoriesForBodegas, AccessoryBodegaResult } from './accessorySheetSync'
 import { syncMeshesForBodegas, MeshBodegaResult } from './meshSheetSync'
+import { syncCenefasForBodegas, CenefaBodegaResult } from './cenefaSheetSync'
 
 // -------- Configuración de bodegas (qué archivos de Sheets están activos) --------
 
@@ -420,7 +421,7 @@ async function reconcileBodega(
     // Sin esta exclusión, esto las marcaba como huérfanas y las vaciaba,
     // justo antes de que su propio sync (accessorySheetSync/meshSheetSync)
     // fuera a leerlas — pudiendo perder una edición reciente del personal.
-    if (tab.title === MESH_TAB_NAME || tab.title === ACCESSORY_TAB_NAME) continue
+    if (tab.title === MESH_TAB_NAME || tab.title === ACCESSORY_TAB_NAME || tab.title === CENEFA_TAB_NAME) continue
     if (managedTitles.has(tab.title) || toClear.includes(tab.title)) continue
     const oldRows = rowsByTab.get(tab.title) || []
     if (oldRows.length === 0) continue
@@ -442,6 +443,7 @@ export interface SyncSummary {
   durationMs: number
   bodegas: BodegaResult[]
   meshBodegas: MeshBodegaResult[]
+  cenefaBodegas: CenefaBodegaResult[]
   accessoryBodegas: AccessoryBodegaResult[]
   conflicts: { productId: string; field: 'name' | 'price' }[]
   skipped?: boolean
@@ -494,7 +496,7 @@ export async function syncAllBodegas(options?: { allowStructural?: boolean; invo
   const invocationId = options?.invocationId ?? crypto.randomUUID()
   const startedAt = Date.now()
   const configs = getConfiguredBodegas()
-  const summary: SyncSummary = { ranAt: new Date().toISOString(), durationMs: 0, bodegas: [], meshBodegas: [], accessoryBodegas: [], conflicts: [] }
+  const summary: SyncSummary = { ranAt: new Date().toISOString(), durationMs: 0, bodegas: [], meshBodegas: [], cenefaBodegas: [], accessoryBodegas: [], conflicts: [] }
 
   if (configs.length === 0) {
     summary.durationMs = Date.now() - startedAt
@@ -532,9 +534,10 @@ export async function syncAllBodegas(options?: { allowStructural?: boolean; invo
       }
     }
 
-    // Misma bodega/candado/invocación — mallas y adhesivos van como pestañas
-    // adicionales dentro del mismo archivo por bodega, no archivos aparte.
+    // Misma bodega/candado/invocación — mallas, cenefas y adhesivos van como
+    // pestañas adicionales dentro del mismo archivo por bodega, no archivos aparte.
     summary.meshBodegas = await syncMeshesForBodegas(sheets, supabase, configs, allowStructural, invocationId)
+    summary.cenefaBodegas = await syncCenefasForBodegas(sheets, supabase, configs, allowStructural, invocationId)
     summary.accessoryBodegas = await syncAccessoriesForBodegas(sheets, supabase, configs, allowStructural, invocationId)
   } finally {
     await releaseLock(supabase)
