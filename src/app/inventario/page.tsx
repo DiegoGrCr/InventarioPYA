@@ -8,7 +8,7 @@ export default async function InventarioPage() {
 
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: products }, { data: meshes }, { data: banos }, { data: accessories }, { data: brands }, { data: sizes }, { data: bodegaStockRows }, { data: meshBodegaStockRows }, { data: accessoryBodegaStockRows }] = await Promise.all([
+  const [{ data: products }, { data: meshes }, { data: cenefas }, { data: banos }, { data: accessories }, { data: brands }, { data: sizes }, { data: bodegaStockRows }, { data: meshBodegaStockRows }, { data: cenefaBodegaStockRows }, { data: accessoryBodegaStockRows }] = await Promise.all([
     supabase
       .from('products')
       .select('id, name, stock, sku, material, brand_id, size_id, sale_unit, price_per_sqm, price_per_box, sqm_per_box, pieces_per_box, brand:brands(name), size:sizes(label, width, height)')
@@ -16,6 +16,11 @@ export default async function InventarioPage() {
       .order('stock', { ascending: true }),
     supabase
       .from('meshes')
+      .select('id, name, stock, sku, brand_id, size_id, sale_unit, price_per_sqm, price_per_box, sqm_per_box, pieces_per_box, brand:brands(name), size:sizes(label, width, height)')
+      .eq('is_active', true)
+      .order('stock', { ascending: true }),
+    supabase
+      .from('cenefas')
       .select('id, name, stock, sku, brand_id, size_id, sale_unit, price_per_sqm, price_per_box, sqm_per_box, pieces_per_box, brand:brands(name), size:sizes(label, width, height)')
       .eq('is_active', true)
       .order('stock', { ascending: true }),
@@ -33,6 +38,7 @@ export default async function InventarioPage() {
     supabase.from('sizes').select('id, label, width, height'),
     supabase.from('product_bodega_stock').select('product_id, bodega, stock'),
     supabase.from('mesh_bodega_stock').select('mesh_id, bodega, stock'),
+    supabase.from('cenefa_bodega_stock').select('cenefa_id, bodega, stock'),
     supabase.from('accessory_bodega_stock').select('accessory_id, bodega, stock'),
   ])
 
@@ -48,6 +54,12 @@ export default async function InventarioPage() {
   ;(meshBodegaStockRows || []).forEach(r => {
     if (!bodegaStockByMesh[r.mesh_id]) bodegaStockByMesh[r.mesh_id] = []
     bodegaStockByMesh[r.mesh_id].push({ bodega: r.bodega, stock: r.stock })
+  })
+
+  const bodegaStockByCenefa: Record<string, { bodega: string; stock: number }[]> = {}
+  ;(cenefaBodegaStockRows || []).forEach(r => {
+    if (!bodegaStockByCenefa[r.cenefa_id]) bodegaStockByCenefa[r.cenefa_id] = []
+    bodegaStockByCenefa[r.cenefa_id].push({ bodega: r.bodega, stock: r.stock })
   })
 
   const bodegaStockByAccessory: Record<string, { bodega: string; stock: number }[]> = {}
@@ -68,12 +80,14 @@ export default async function InventarioPage() {
       <InventoryTable
         products={(products || []) as any}
         meshes={(meshes || []) as any}
+        cenefas={(cenefas || []) as any}
         banos={(banos || []) as any}
         accessories={(accessories || []) as any}
         brands={(brands || []) as any}
         sizes={sortedSizes as any}
         bodegaStockByProduct={bodegaStockByProduct}
         bodegaStockByMesh={bodegaStockByMesh}
+        bodegaStockByCenefa={bodegaStockByCenefa}
         bodegaStockByAccessory={bodegaStockByAccessory}
       />
     </div>

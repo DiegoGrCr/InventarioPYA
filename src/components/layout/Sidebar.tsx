@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useIsAdmin } from '@/contexts/AdminContext'
 import {
   LayoutDashboard, Home, Layers, Package, ClipboardList,
-  Tag, Ruler, Calculator, Toilet, ShieldCheck, Grid3x3,
+  Tag, Ruler, Calculator, Toilet, ShieldCheck, Grid3x3, Rows3,
 } from 'lucide-react'
 
 const navItems = [
@@ -15,6 +15,7 @@ const navItems = [
   { section: 'Catálogo' },
   { label: 'Pisos',       href: '/pisos',        icon: Layers },
   { label: 'Mallas',      href: '/mallas',       icon: Grid3x3 },
+  { label: 'Cenefas',     href: '/cenefas',      icon: Rows3 },
   { label: 'Baños',       href: '/banos',        icon: Toilet },
   { label: 'Adhesivos',    href: '/complementos', icon: Package },
   { section: 'Gestión', adminOnly: true },

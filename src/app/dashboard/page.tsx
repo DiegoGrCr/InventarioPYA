@@ -2,16 +2,17 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { isAdminSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Layers, Package, AlertTriangle, Tag, PackageOpen, Plus, Ruler, Calculator, Toilet, Grid3x3 } from 'lucide-react'
+import { Layers, Package, AlertTriangle, Tag, PackageOpen, Plus, Ruler, Calculator, Toilet, Grid3x3, Rows3 } from 'lucide-react'
 
 export default async function DashboardPage() {
   if (!(await isAdminSession())) redirect('/')
 
   const supabase = await createServerSupabaseClient()
 
-  const [productsRes, meshesRes, accessoriesRes, banosRes, lowStockRes, brandsRes] = await Promise.all([
+  const [productsRes, meshesRes, cenefasRes, accessoriesRes, banosRes, lowStockRes, brandsRes] = await Promise.all([
     supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('meshes').select('id', { count: 'exact', head: true }).eq('is_active', true),
+    supabase.from('cenefas').select('id', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('accessories').select('id', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('bano_products').select('id', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true).lte('stock', 5),
@@ -20,6 +21,7 @@ export default async function DashboardPage() {
 
   const totalProducts = productsRes.count || 0
   const totalMeshes = meshesRes.count || 0
+  const totalCenefas = cenefasRes.count || 0
   const totalAccessories = accessoriesRes.count || 0
   const totalBanos = banosRes.count || 0
   const lowStock = lowStockRes.count || 0
@@ -55,6 +57,13 @@ export default async function DashboardPage() {
           <div className="stat-info">
             <h3>{totalMeshes}</h3>
             <p>Mallas en catálogo</p>
+          </div>
+        </Link>
+        <Link href="/cenefas" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+          <div className="stat-icon primary"><Rows3 size={22} /></div>
+          <div className="stat-info">
+            <h3>{totalCenefas}</h3>
+            <p>Cenefas en catálogo</p>
           </div>
         </Link>
         <Link href="/banos" className="stat-card" style={{ textDecoration: 'none', cursor: 'pointer' }}>
@@ -125,6 +134,7 @@ export default async function DashboardPage() {
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '32px', flexWrap: 'wrap' }}>
         <Link href="/mallas/nuevo" className="btn btn-secondary"><Grid3x3 size={16} /> Nueva Malla</Link>
+        <Link href="/cenefas/nuevo" className="btn btn-secondary"><Rows3 size={16} /> Nueva Cenefa</Link>
         <Link href="/complementos/nuevo" className="btn btn-secondary"><Package size={16} /> Nuevo Adhesivo</Link>
         <Link href="/marcas" className="btn btn-secondary"><Tag size={16} /> Gestionar Marcas</Link>
         <Link href="/medidas" className="btn btn-secondary"><Ruler size={16} /> Gestionar Medidas</Link>

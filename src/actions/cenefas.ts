@@ -1,0 +1,239 @@
+'use server'
+
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+
+export async function getCenefas(filters?: {
+  brand_id?: string
+  size_id?: string
+  search?: string
+}) {
+  const supabase = await createServerSupabaseClient()
+  let query = supabase
+    .from('cenefas')
+    .select('*, brand:brands(*), size:sizes(*)')
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+
+  if (filters?.brand_id) query = query.eq('brand_id', filters.brand_id)
+  if (filters?.size_id) query = query.eq('size_id', filters.size_id)
+  if (filters?.search) query = query.ilike('name', `%${filters.search}%`)
+
+  const { data, error } = await query
+  if (error) throw error
+  return data || []
+}
+
+export async function getCenefa(id: string) {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('cenefas')
+    .select('*, brand:brands(*), size:sizes(*)')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function findCenefasByName(name: string, excludeId?: string) {
+  const trimmed = name.trim()
+  if (!trimmed) return []
+
+  const supabase = await createServerSupabaseClient()
+  let query = supabase
+    .from('cenefas')
+    .select('id, name, brand:brands(name), size:sizes(label)')
+    .ilike('name', trimmed)
+    .eq('is_active', true)
+    .limit(5)
+
+  if (excludeId) query = query.neq('id', excludeId)
+
+  const { data, error } = await query
+  if (error) return []
+  return data
+}
+
+// ===== Stock por bodega =====
+// cenefas.stock se mantiene como el TOTAL, recalculado aquí mismo cada vez
+// que cambian las filas de cenefa_bodega_stock de una cenefa.
+
+export async function getCenefaBodegaStock(cenefaId: string) {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from('cenefa_bodega_stock')
+    .select('bodega, stock')
+    .eq('cenefa_id', cenefaId)
+    .order('bodega')
+  if (error) return []
+  return data
+}
+
+async function recomputeCenefaStockTotal(cenefaId: string) {
+  const supabase = await createServerSupabaseClient()
+  const { data } = await supabase
+    .from('cenefa_bodega_stock')
+    .select('stock')
+    .eq('cenefa_id', cenefaId)
+  const total = (data || []).reduce((sum, r) => sum + r.stock, 0)
+  await supabase.from('cenefas').update({ stock: total }).eq('id', cenefaId)
+  return total
+}
+
+export async function replaceCenefaBodegaStock(cenefaId: string, entries: { bodega: string; stock: number }[]) {
+  const supabase = await createServerSupabaseClient()
+
+  const { error: delError } = await supabase.from('cenefa_bodega_stock').delete().eq('cenefa_id', cenefaId)
+  if (delError) return { error: delError.message }
+
+  // No filtramos por stock > 0: una bodega marcada con 0 sigue siendo una
+  // asignación real (el material se sigue vendiendo/reabasteciendo ahí),
+  // solo se omiten las bodegas que ni siquiera se marcaron en el formulario.
+  const rows = entries.map(e => ({ cenefa_id: cenefaId, bodega: e.bodega, stock: e.stock }))
+  if (rows.length > 0) {
+    const { error: insError } = await supabase.from('cenefa_bodega_stock').insert(rows)
+    if (insError) return { error: insError.message }
+  }
+
+  await recomputeCenefaStockTotal(cenefaId)
+  revalidatePath('/cenefas')
+  revalidatePath(`/cenefas/${cenefaId}`)
+  revalidatePath('/inventario')
+  revalidatePath('/')
+  return { success: true }
+}
+
+export async function adjustCenefaBodegaStock(cenefaId: string, bodega: string, newStock: number) {
+  if (newStock < 0) return { error: 'El stock no puede ser negativo' }
+  const supabase = await createServerSupabaseClient()
+
+  const { error } = await supabase
+    .from('cenefa_bodega_stock')
+    .upsert({ cenefa_id: cenefaId, bodega, stock: newStock }, { onConflict: 'cenefa_id,bodega' })
+
+  if (error) return { error: error.message }
+
+  const total = await recomputeCenefaStockTotal(cenefaId)
+  revalidatePath('/cenefas')
+  revalidatePath(`/cenefas/${cenefaId}`)
+  revalidatePath('/inventario')
+  revalidatePath('/')
+  return { success: true, total }
+}
+
+function parseBodegaEntries(formData: FormData) {
+  return formData.getAll('bodega_nombre').map((bodega, i) => ({
+    bodega: bodega as string,
+    stock: parseInt(formData.getAll('bodega_stock')[i] as string) || 0,
+  }))
+}
+
+export async function createCenefa(formData: FormData) {
+  const supabase = await createServerSupabaseClient()
+
+  // Image is uploaded client-side; we just receive the resulting public URL
+  const imageUrl = (formData.get('image_url') as string) || null
+
+  const sqmPerBox = parseFloat(formData.get('sqm_per_box') as string) || null
+  const pricePerSqm = parseFloat(formData.get('price_per_sqm') as string) || null
+  const pricePerBox = pricePerSqm && sqmPerBox ? parseFloat((pricePerSqm * sqmPerBox).toFixed(2)) : null
+  const saleUnit = (formData.get('sale_unit') as string) || 'caja'
+  const bodegaEntries = parseBodegaEntries(formData)
+  const totalStock = bodegaEntries.reduce((sum, e) => sum + e.stock, 0)
+
+  const { data, error } = await supabase.from('cenefas').insert({
+    name: formData.get('name') as string,
+    description: (formData.get('description') as string) || null,
+    brand_id: (formData.get('brand_id') as string) || null,
+    size_id: (formData.get('size_id') as string) || null,
+    sku: (formData.get('sku') as string) || null,
+    finish: (formData.get('finish') as string) || null,
+    color: (formData.get('color') as string) || null,
+    stock: totalStock,
+    sale_unit: saleUnit,
+    pieces_per_box: parseInt(formData.get('pieces_per_box') as string) || null,
+    sqm_per_box: sqmPerBox,
+    price_per_sqm: pricePerSqm,
+    price_per_box: pricePerBox,
+    image_url: imageUrl,
+  }).select('id').single()
+
+  if (error) return { error: error.message }
+
+  const rows = bodegaEntries.map(e => ({ cenefa_id: data.id, bodega: e.bodega, stock: e.stock }))
+  if (rows.length > 0) await supabase.from('cenefa_bodega_stock').insert(rows)
+
+  revalidatePath('/cenefas')
+  revalidatePath('/')
+  return { success: true }
+}
+
+export async function updateCenefa(id: string, formData: FormData) {
+  const supabase = await createServerSupabaseClient()
+
+  // Image is uploaded client-side; we receive the URL (new or existing)
+  const imageUrl = (formData.get('image_url') as string) || null
+
+  const sqmPerBox = parseFloat(formData.get('sqm_per_box') as string) || null
+  const pricePerSqm = parseFloat(formData.get('price_per_sqm') as string) || null
+  const pricePerBox = pricePerSqm && sqmPerBox ? parseFloat((pricePerSqm * sqmPerBox).toFixed(2)) : null
+  const saleUnit = (formData.get('sale_unit') as string) || 'caja'
+  const bodegaEntries = parseBodegaEntries(formData)
+  const totalStock = bodegaEntries.reduce((sum, e) => sum + e.stock, 0)
+
+  const { error } = await supabase.from('cenefas').update({
+    name: formData.get('name') as string,
+    description: (formData.get('description') as string) || null,
+    brand_id: (formData.get('brand_id') as string) || null,
+    size_id: (formData.get('size_id') as string) || null,
+    sku: (formData.get('sku') as string) || null,
+    finish: (formData.get('finish') as string) || null,
+    color: (formData.get('color') as string) || null,
+    stock: totalStock,
+    sale_unit: saleUnit,
+    pieces_per_box: parseInt(formData.get('pieces_per_box') as string) || null,
+    sqm_per_box: sqmPerBox,
+    price_per_sqm: pricePerSqm,
+    price_per_box: pricePerBox,
+    image_url: imageUrl,
+  }).eq('id', id)
+
+  if (error) return { error: error.message }
+
+  await replaceCenefaBodegaStock(id, bodegaEntries)
+
+  revalidatePath('/cenefas')
+  revalidatePath(`/cenefas/${id}`)
+  revalidatePath('/')
+  return { success: true }
+}
+
+export async function updateCenefasPriceBulk(
+  updates: { id: string; price_per_sqm: number; sqm_per_box: number | null }[]
+) {
+  const supabase = await createServerSupabaseClient()
+
+  const results = await Promise.all(
+    updates.map(({ id, price_per_sqm, sqm_per_box }) => {
+      const price_per_box = sqm_per_box ? parseFloat((price_per_sqm * sqm_per_box).toFixed(2)) : null
+      return supabase.from('cenefas').update({ price_per_sqm, price_per_box }).eq('id', id)
+    })
+  )
+
+  const failed = results.filter(r => r.error)
+  if (failed.length > 0) return { error: `Fallaron ${failed.length} de ${updates.length} actualizaciones` }
+
+  revalidatePath('/cenefas')
+  revalidatePath('/inventario')
+  revalidatePath('/')
+  return { success: true }
+}
+
+export async function deleteCenefa(id: string) {
+  const supabase = await createServerSupabaseClient()
+  const { error } = await supabase.from('cenefas').update({ is_active: false }).eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/cenefas')
+  revalidatePath('/')
+  return { success: true }
+}

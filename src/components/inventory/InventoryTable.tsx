@@ -3,11 +3,12 @@
 import { useState, Fragment } from 'react'
 import { updateProductsPriceBulk, adjustProductBodegaStock } from '@/actions/products'
 import { updateMeshesPriceBulk, adjustMeshBodegaStock } from '@/actions/meshes'
+import { updateCenefasPriceBulk, adjustCenefaBodegaStock } from '@/actions/cenefas'
 import { updateBanoStock } from '@/actions/banos'
 import { adjustAccessoryBodegaStock } from '@/actions/accessories'
 import { getStockStatus } from '@/lib/utils'
 import { WAREHOUSES } from '@/lib/types'
-import { Layers, Grid3x3, Toilet, Package, FileSpreadsheet, Loader2, Tag, ChevronRight, ChevronDown } from 'lucide-react'
+import { Layers, Grid3x3, Rows3, Toilet, Package, FileSpreadsheet, Loader2, Tag, ChevronRight, ChevronDown } from 'lucide-react'
 
 type ExportScope = 'all' | 'brand' | 'size' | 'bodega'
 type BodegaRow = { bodega: string; stock: number }
@@ -31,6 +32,7 @@ interface CatalogItem {
 interface InventoryTableProps {
   products: Array<CatalogItem & { material: string }>
   meshes: CatalogItem[]
+  cenefas: CatalogItem[]
   banos: Array<{
     id: string
     name: string
@@ -46,23 +48,26 @@ interface InventoryTableProps {
   sizes: Array<{ id: string; label: string; width: number; height: number }>
   bodegaStockByProduct: Record<string, BodegaRow[]>
   bodegaStockByMesh: Record<string, BodegaRow[]>
+  bodegaStockByCenefa: Record<string, BodegaRow[]>
   bodegaStockByAccessory: Record<string, BodegaRow[]>
 }
 
 const fmtBodegas = (bodegas: string[] | null) => (bodegas && bodegas.length > 0 ? bodegas.join(', ') : '')
 
-export default function InventoryTable({ products, meshes, banos, accessories, brands, sizes, bodegaStockByProduct, bodegaStockByMesh, bodegaStockByAccessory }: InventoryTableProps) {
-  const [tab, setTab] = useState<'pisos' | 'mallas' | 'banos' | 'accesorios'>('pisos')
+export default function InventoryTable({ products, meshes, cenefas, banos, accessories, brands, sizes, bodegaStockByProduct, bodegaStockByMesh, bodegaStockByCenefa, bodegaStockByAccessory }: InventoryTableProps) {
+  const [tab, setTab] = useState<'pisos' | 'mallas' | 'cenefas' | 'banos' | 'accesorios'>('pisos')
   const [stocks, setStocks] = useState<Record<string, number>>(() => {
     const map: Record<string, number> = {}
     products.forEach(p => { map[p.id] = p.stock })
     meshes.forEach(m => { map[m.id] = m.stock })
+    cenefas.forEach(c => { map[c.id] = c.stock })
     banos.forEach(b => { map[b.id] = b.stock })
     accessories.forEach(a => { map[a.id] = a.stock })
     return map
   })
   const [bodegaMap, setBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByProduct)
   const [meshBodegaMap, setMeshBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByMesh)
+  const [cenefaBodegaMap, setCenefaBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByCenefa)
   const [accessoryBodegaMap, setAccessoryBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByAccessory)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState<string | null>(null)
@@ -85,6 +90,12 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
   const [filterBrandIdMesh, setFilterBrandIdMesh] = useState('')
   const [filterSizeIdMesh, setFilterSizeIdMesh] = useState('')
 
+  const [selectedCenefaIds, setSelectedCenefaIds] = useState<Set<string>>(new Set())
+  const [bulkPriceCenefa, setBulkPriceCenefa] = useState('')
+  const [applyingBulkCenefa, setApplyingBulkCenefa] = useState(false)
+  const [filterBrandIdCenefa, setFilterBrandIdCenefa] = useState('')
+  const [filterSizeIdCenefa, setFilterSizeIdCenefa] = useState('')
+
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const filteredProducts = products.filter(p =>
@@ -95,6 +106,11 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
   const filteredMeshes = meshes.filter(m =>
     (!filterBrandIdMesh || m.brand_id === filterBrandIdMesh) &&
     (!filterSizeIdMesh || m.size_id === filterSizeIdMesh)
+  )
+
+  const filteredCenefas = cenefas.filter(c =>
+    (!filterBrandIdCenefa || c.brand_id === filterBrandIdCenefa) &&
+    (!filterSizeIdCenefa || c.size_id === filterSizeIdCenefa)
   )
 
   const showFeedback = (type: 'success' | 'error', message: string) => {
@@ -120,6 +136,15 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
     })
   }
 
+  const toggleSelectedCenefa = (id: string) => {
+    setSelectedCenefaIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   const toggleExpanded = (id: string) => {
     setExpanded(prev => {
       const next = new Set(prev)
@@ -131,6 +156,7 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
 
   const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.has(p.id))
   const allFilteredMeshesSelected = filteredMeshes.length > 0 && filteredMeshes.every(m => selectedMeshIds.has(m.id))
+  const allFilteredCenefasSelected = filteredCenefas.length > 0 && filteredCenefas.every(c => selectedCenefaIds.has(c.id))
 
   const toggleSelectAllPisos = () => {
     setSelectedIds(prev => {
@@ -154,6 +180,19 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
       }
       const next = new Set(prev)
       filteredMeshes.forEach(m => next.add(m.id))
+      return next
+    })
+  }
+
+  const toggleSelectAllCenefas = () => {
+    setSelectedCenefaIds(prev => {
+      if (allFilteredCenefasSelected) {
+        const next = new Set(prev)
+        filteredCenefas.forEach(c => next.delete(c.id))
+        return next
+      }
+      const next = new Set(prev)
+      filteredCenefas.forEach(c => next.add(c.id))
       return next
     })
   }
@@ -214,6 +253,34 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
     setBulkPriceMesh('')
   }
 
+  const applyBulkPriceCenefa = async () => {
+    const newPrice = parseFloat(bulkPriceCenefa)
+    if (!newPrice || newPrice <= 0 || selectedCenefaIds.size === 0) return
+
+    const targets = cenefas.filter(c => selectedCenefaIds.has(c.id))
+    if (!confirm(`¿Aplicar $${newPrice.toFixed(2)}/m² a ${targets.length} cenefa(s) seleccionada(s)?`)) return
+
+    setApplyingBulkCenefa(true)
+    const res = await updateCenefasPriceBulk(
+      targets.map(c => ({ id: c.id, price_per_sqm: newPrice, sqm_per_box: c.sqm_per_box }))
+    )
+    setApplyingBulkCenefa(false)
+
+    if (res.error) {
+      showFeedback('error', res.error)
+      return
+    }
+
+    setPriceOverrides(prev => {
+      const next = { ...prev }
+      targets.forEach(c => { next[c.id] = newPrice })
+      return next
+    })
+    showFeedback('success', `Precio actualizado en ${targets.length} cenefa(s)`)
+    setSelectedCenefaIds(new Set())
+    setBulkPriceCenefa('')
+  }
+
   const updateStock = async (id: string, newStock: number) => {
     if (newStock < 0) return
     setStocks(prev => ({ ...prev, [id]: newStock }))
@@ -248,6 +315,19 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
     setSaving(null)
   }
 
+  const adjustCenefaBodega = async (cenefaId: string, bodega: string, newStock: number) => {
+    if (newStock < 0) return
+    const savingKey = `cenefa:${cenefaId}:${bodega}`
+    setCenefaBodegaMap(prev => ({
+      ...prev,
+      [cenefaId]: (prev[cenefaId] || []).map(r => (r.bodega === bodega ? { ...r, stock: newStock } : r)),
+    }))
+    setSaving(savingKey)
+    const res = await adjustCenefaBodegaStock(cenefaId, bodega, newStock)
+    if (res.total !== undefined) setStocks(prev => ({ ...prev, [cenefaId]: res.total! }))
+    setSaving(null)
+  }
+
   const adjustAccessoryBodega = async (accessoryId: string, bodega: string, newStock: number) => {
     if (newStock < 0) return
     const savingKey = `acc:${accessoryId}:${bodega}`
@@ -273,12 +353,15 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
 
       let scoped = products
       let scopedMeshes = meshes
+      let scopedCenefas = cenefas
       if (exportScope === 'brand' && selectedBrandId) {
         scoped = products.filter(p => p.brand_id === selectedBrandId)
         scopedMeshes = meshes.filter(m => m.brand_id === selectedBrandId)
+        scopedCenefas = cenefas.filter(c => c.brand_id === selectedBrandId)
       } else if (exportScope === 'size' && selectedSizeId) {
         scoped = products.filter(p => p.size_id === selectedSizeId)
         scopedMeshes = meshes.filter(m => m.size_id === selectedSizeId)
+        scopedCenefas = cenefas.filter(c => c.size_id === selectedSizeId)
       }
 
       type Item = { name: string; formato: string; area: number; piezas: number | null; m2: number | null; stock: number; precio: number | null; brand: string }
@@ -286,6 +369,7 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
 
       type MeshItem = { name: string; brand: string; formato: string; piezas: number | null; m2: number | null; precio: number | null; bodega: string; stock: number }
       let meshItems: MeshItem[] = []
+      let cenefaItems: MeshItem[] = []
 
       if (exportScope === 'bodega' && selectedBodega) {
         scoped.forEach(p => {
@@ -316,6 +400,20 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
             stock: row.stock,
           })
         })
+        scopedCenefas.forEach(c => {
+          const row = (cenefaBodegaMap[c.id] || []).find(b => b.bodega === selectedBodega)
+          if (!row) return
+          cenefaItems.push({
+            name: c.name,
+            brand: c.brand?.name || 'Sin marca',
+            formato: c.size?.label || 'Sin medida',
+            piezas: c.sale_unit === 'pieza' ? null : c.pieces_per_box,
+            m2: c.sqm_per_box,
+            precio: c.price_per_sqm,
+            bodega: selectedBodega,
+            stock: row.stock,
+          })
+        })
       } else {
         items = scoped.map(p => ({
           name: p.name,
@@ -337,6 +435,16 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
           bodega: (meshBodegaMap[m.id] || []).map(r => r.bodega).join(', '),
           stock: stocks[m.id],
         }))
+        cenefaItems = scopedCenefas.map(c => ({
+          name: c.name,
+          brand: c.brand?.name || 'Sin marca',
+          formato: c.size?.label || 'Sin medida',
+          piezas: c.sale_unit === 'pieza' ? null : c.pieces_per_box,
+          m2: c.sqm_per_box,
+          precio: c.price_per_sqm,
+          bodega: (cenefaBodegaMap[c.id] || []).map(r => r.bodega).join(', '),
+          stock: stocks[c.id],
+        }))
       }
 
       const scopedBanos = exportScope === 'bodega' && selectedBodega
@@ -349,6 +457,7 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
       const workbook = await buildInventoryWorkbook({
         items,
         meshes: meshItems,
+        cenefas: cenefaItems,
         banos: scopedBanos.map(b => ({ name: b.name, brand: b.brand, model: b.model, color: b.color, bodega: fmtBodegas(b.bodegas), stock: stocks[b.id], price: b.price })),
         accessories: scopedAccessories.map(a => {
           const rows = accessoryBodegaMap[a.id] || []
@@ -438,6 +547,7 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
       <div className="tabs">
         <button className={`tab ${tab === 'pisos' ? 'active' : ''}`} onClick={() => setTab('pisos')}><Layers size={15} /> Pisos ({products.length})</button>
         <button className={`tab ${tab === 'mallas' ? 'active' : ''}`} onClick={() => setTab('mallas')}><Grid3x3 size={15} /> Mallas ({meshes.length})</button>
+        <button className={`tab ${tab === 'cenefas' ? 'active' : ''}`} onClick={() => setTab('cenefas')}><Rows3 size={15} /> Cenefas ({cenefas.length})</button>
         <button className={`tab ${tab === 'banos' ? 'active' : ''}`} onClick={() => setTab('banos')}><Toilet size={15} /> Baños ({banos.length})</button>
         <button className={`tab ${tab === 'accesorios' ? 'active' : ''}`} onClick={() => setTab('accesorios')}><Package size={15} /> Adhesivos ({accessories.length})</button>
       </div>
@@ -502,6 +612,36 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
         </div>
       )}
 
+      {tab === 'cenefas' && (
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Filtrar:</span>
+          <select
+            className="form-select"
+            style={{ fontSize: '13px', padding: '6px 10px', width: 'auto' }}
+            value={filterBrandIdCenefa}
+            onChange={e => setFilterBrandIdCenefa(e.target.value)}
+          >
+            <option value="">Todas las marcas</option>
+            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+          <select
+            className="form-select"
+            style={{ fontSize: '13px', padding: '6px 10px', width: 'auto' }}
+            value={filterSizeIdCenefa}
+            onChange={e => setFilterSizeIdCenefa(e.target.value)}
+          >
+            <option value="">Todas las medidas</option>
+            {sizes.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+          {(filterBrandIdCenefa || filterSizeIdCenefa) && (
+            <button className="btn btn-ghost" style={{ fontSize: '13px', padding: '6px 12px' }} onClick={() => { setFilterBrandIdCenefa(''); setFilterSizeIdCenefa('') }}>
+              Limpiar filtro
+            </button>
+          )}
+          <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{filteredCenefas.length} cenefa(s)</span>
+        </div>
+      )}
+
       {tab === 'pisos' && selectedIds.size > 0 && (
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px', padding: '12px 16px', background: 'var(--primary-light)', borderRadius: 'var(--radius)', border: '1px solid rgba(99,102,241,0.3)' }}>
           <Tag size={16} style={{ color: 'var(--primary-hover)', flexShrink: 0 }} />
@@ -558,6 +698,34 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
         </div>
       )}
 
+      {tab === 'cenefas' && selectedCenefaIds.size > 0 && (
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px', padding: '12px 16px', background: 'var(--primary-light)', borderRadius: 'var(--radius)', border: '1px solid rgba(99,102,241,0.3)' }}>
+          <Tag size={16} style={{ color: 'var(--primary-hover)', flexShrink: 0 }} />
+          <span style={{ fontSize: '13px', fontWeight: 600 }}>{selectedCenefaIds.size} seleccionada(s)</span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            className="form-input"
+            placeholder="Nuevo precio/m²"
+            style={{ width: '160px', padding: '6px 10px', fontSize: '13px' }}
+            value={bulkPriceCenefa}
+            onChange={e => setBulkPriceCenefa(e.target.value)}
+          />
+          <button
+            className="btn btn-primary"
+            style={{ fontSize: '13px', padding: '6px 14px' }}
+            onClick={applyBulkPriceCenefa}
+            disabled={applyingBulkCenefa || !bulkPriceCenefa || parseFloat(bulkPriceCenefa) <= 0}
+          >
+            {applyingBulkCenefa ? <><Loader2 size={14} className="spin" /> Aplicando...</> : 'Aplicar precio'}
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: '13px', padding: '6px 14px' }} onClick={() => setSelectedCenefaIds(new Set())}>
+            Cancelar selección
+          </button>
+        </div>
+      )}
+
       <div className="table-container">
         <table className="table">
           <thead>
@@ -580,8 +748,17 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
                   />
                 </th>
               )}
+              {tab === 'cenefas' && (
+                <th style={{ width: '32px' }}>
+                  <input
+                    type="checkbox"
+                    checked={allFilteredCenefasSelected}
+                    onChange={toggleSelectAllCenefas}
+                  />
+                </th>
+              )}
               <th>Producto</th>
-              {(tab === 'pisos' || tab === 'mallas') && <><th>Marca</th><th>Medida</th><th>Precio/m²</th></>}
+              {(tab === 'pisos' || tab === 'mallas' || tab === 'cenefas') && <><th>Marca</th><th>Medida</th><th>Precio/m²</th></>}
               {tab === 'banos' && <><th>Marca</th><th>Modelo</th></>}
               {tab === 'accesorios' && <th>Categoría</th>}
               <th>Bodega</th>
@@ -701,6 +878,65 @@ export default function InventoryTable({ products, meshes, banos, accessories, b
                         <td></td>
                         <td colSpan={7} style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-muted)' }}>
                           Sin bodega asignada — edítala desde &quot;Editar Malla&quot;
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </Fragment>
+              )
+            })}
+            {tab === 'cenefas' && filteredCenefas.map(c => {
+              const price = priceOverrides[c.id] ?? c.price_per_sqm
+              const rows = cenefaBodegaMap[c.id] || []
+              const isExpanded = expanded.has(c.id)
+              return (
+                <Fragment key={c.id}>
+                  <tr>
+                    <td>
+                      <input type="checkbox" checked={selectedCenefaIds.has(c.id)} onChange={() => toggleSelectedCenefa(c.id)} />
+                    </td>
+                    <td style={{ color: 'var(--text)', fontWeight: 500 }}>
+                      <button
+                        onClick={() => toggleExpanded(c.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'inherit', font: 'inherit', padding: 0 }}
+                      >
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        {c.name}
+                      </button>
+                    </td>
+                    <td>{c.brand?.name || '—'}</td>
+                    <td>{c.size?.label || '—'}</td>
+                    <td style={{ fontSize: '13px' }}>
+                      {price
+                        ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(price)
+                        : '—'}
+                    </td>
+                    <td style={{ fontSize: '13px' }}>{rows.map(r => r.bodega).join(', ') || '—'}</td>
+                    <td><span className={`badge ${badgeForStock(stocks[c.id])}`}>{stocks[c.id]} {c.sale_unit === 'pieza' ? 'piezas' : 'cajas'}</span></td>
+                    <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{stocks[c.id]}</td>
+                  </tr>
+                  {isExpanded && (
+                    rows.length > 0 ? rows.map(r => (
+                      <tr key={`${c.id}-${r.bodega}`} style={{ background: 'var(--bg)' }}>
+                        <td></td>
+                        <td style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-secondary)' }}>↳ {r.bodega}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td>
+                          <div className="stock-control">
+                            <button className="stock-btn" onClick={() => adjustCenefaBodega(c.id, r.bodega, r.stock - 1)} disabled={saving === `cenefa:${c.id}:${r.bodega}` || r.stock <= 0}>−</button>
+                            <span className="stock-value" style={{ opacity: saving === `cenefa:${c.id}:${r.bodega}` ? 0.5 : 1 }}>{r.stock}</span>
+                            <button className="stock-btn" onClick={() => adjustCenefaBodega(c.id, r.bodega, r.stock + 1)} disabled={saving === `cenefa:${c.id}:${r.bodega}`}>+</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr style={{ background: 'var(--bg)' }}>
+                        <td></td>
+                        <td colSpan={7} style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                          Sin bodega asignada — edítala desde &quot;Editar Cenefa&quot;
                         </td>
                       </tr>
                     )

@@ -179,11 +179,13 @@ function addSimpleSheet(workbook: ExcelJS.Workbook, name: string, headers: strin
 export async function buildInventoryWorkbook({
   items,
   meshes,
+  cenefas,
   banos,
   accessories,
 }: {
   items: PisoItem[]
   meshes: MeshRow[]
+  cenefas: MeshRow[]
   banos: BanoRow[]
   accessories: AccessoryRow[]
 }) {
@@ -208,6 +210,16 @@ export async function buildInventoryWorkbook({
       'Mallas',
       ['Producto', 'Marca', 'Medida', 'Piezas/caja', 'm²/caja', 'Precio/m²', 'Bodega', 'Stock'],
       meshes.map(m => [m.name, m.brand, m.formato, m.piezas ?? '', m.m2 ?? '', m.precio ?? '', m.bodega, m.stock]),
+      usedNames
+    )
+  }
+
+  if (cenefas.length > 0) {
+    addSimpleSheet(
+      workbook,
+      'Cenefas',
+      ['Producto', 'Marca', 'Medida', 'Piezas/caja', 'm²/caja', 'Precio/m²', 'Bodega', 'Stock'],
+      cenefas.map(c => [c.name, c.brand, c.formato, c.piezas ?? '', c.m2 ?? '', c.precio ?? '', c.bodega, c.stock]),
       usedNames
     )
   }
