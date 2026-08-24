@@ -379,10 +379,18 @@ export function buildColumnWidthRequests(sheetId: number): sheets_v4.Schema$Requ
 // de formato condicional (no un color fijo por celda), así que se actualiza
 // sola cuando cambia el stock sin que el sync tenga que reescribirla. Solo se
 // agrega una vez por pestaña (agregarla de nuevo crearía reglas duplicadas).
+// Empieza en SKU (no en FORMATO): FORMATO se fusiona en una sola celda por
+// grupo de medida, y Sheets solo pinta con el color de la celda superior
+// izquierda de la fusión — si esa primera fila del grupo tiene 0 cajas pero
+// otras filas del mismo formato sí tienen stock, la celda fusionada del
+// formato se veía roja igual, dando a entender que TODO el formato estaba
+// agotado cuando solo era una fila.
+const ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL.SKU, endColumnIndex: COL.PRECIO + 1 }
+
 export function buildZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
   return { addConditionalFormatRule: {
     rule: {
-      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS }],
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...ZERO_STOCK_HIGHLIGHT_COLS }],
       booleanRule: {
         // En Sheets una celda vacía cuenta como 0, así que sin el chequeo de
         // que la fila tenga un _product_id real, TODAS las filas vacías de
