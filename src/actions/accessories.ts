@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/adminClient'
 import { requireAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
@@ -35,7 +36,7 @@ export async function getAccessoryBodegaStock(accessoryId: string) {
 }
 
 async function recomputeAccessoryStockTotal(accessoryId: string) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   const { data } = await supabase
     .from('accessory_bodega_stock')
     .select('stock')
@@ -48,7 +49,7 @@ async function recomputeAccessoryStockTotal(accessoryId: string) {
 export async function replaceAccessoryBodegaStock(accessoryId: string, entries: { bodega: string; stock: number }[]) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
 
   const { error: delError } = await supabase.from('accessory_bodega_stock').delete().eq('accessory_id', accessoryId)
   if (delError) return { error: delError.message }
@@ -74,7 +75,7 @@ export async function adjustAccessoryBodegaStock(accessoryId: string, bodega: st
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
   if (newStock < 0) return { error: 'El stock no puede ser negativo' }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
 
   const { error } = await supabase
     .from('accessory_bodega_stock')
@@ -100,7 +101,7 @@ function parseBodegaEntries(formData: FormData) {
 export async function createAccessory(formData: FormData) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
 
   // Image is uploaded client-side; we just receive the resulting public URL
   const imageUrl = (formData.get('image_url') as string) || null
@@ -133,7 +134,7 @@ export async function createAccessory(formData: FormData) {
 export async function updateAccessory(id: string, formData: FormData) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
 
   const imageUrl = (formData.get('image_url') as string) || null
   const bodegaEntries = parseBodegaEntries(formData)
@@ -165,7 +166,7 @@ export async function updateAccessory(id: string, formData: FormData) {
 export async function deleteAccessory(id: string) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   const { error } = await supabase.from('accessories').update({ is_active: false }).eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/complementos')

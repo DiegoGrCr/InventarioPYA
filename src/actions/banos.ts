@@ -1,13 +1,13 @@
 'use server'
 
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/adminClient'
 import { requireAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
 export async function createBanoProduct(formData: FormData) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   const imageUrl = (formData.get('image_url') as string) || null
   const bodegas = formData.getAll('bodegas') as string[]
 
@@ -32,7 +32,7 @@ export async function createBanoProduct(formData: FormData) {
 export async function updateBanoProduct(id: string, formData: FormData) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   const imageUrl = (formData.get('image_url') as string) || null
   const bodegas = formData.getAll('bodegas') as string[]
 
@@ -58,7 +58,7 @@ export async function updateBanoProduct(id: string, formData: FormData) {
 export async function updateBanoStock(id: string, stock: number) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   const { error } = await supabase.from('bano_products').update({ stock }).eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/banos')
@@ -70,7 +70,7 @@ export async function updateBanoStock(id: string, stock: number) {
 export async function deleteBanoProduct(id: string) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   const { error } = await supabase.from('bano_products').update({ is_active: false }).eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/banos')

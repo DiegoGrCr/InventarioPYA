@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createMesh, updateMesh, findMeshesByName } from '@/actions/meshes'
-import { createClient } from '@/lib/supabase/client'
+import { uploadImage } from '@/actions/uploads'
 import { Brand, Size, Mesh, WAREHOUSES } from '@/lib/types'
 import { Camera, Loader2, Save, CheckCircle, AlertTriangle } from 'lucide-react'
 
@@ -69,26 +69,16 @@ export default function MeshForm({ brands, sizes, mesh, bodegaStock = [] }: Mesh
     reader.onloadend = () => setPreview(reader.result as string)
     reader.readAsDataURL(file)
 
-    // Upload directly from browser to Supabase Storage
     setUploading(true)
     setUploadError('')
     try {
-      const supabase = createClient()
-      const ext = file.name.split('.').pop()
-      const fileName = `mallas/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: storageError } = await supabase.storage
-        .from('product-images')
-        .upload(fileName, file, { upsert: false })
-
-      if (storageError) {
-        setUploadError(`No se pudo subir la imagen: ${storageError.message}`)
+      const result = await uploadImage(file, 'mallas')
+      if ('error' in result) {
+        setUploadError(result.error)
         setPreview(null)
         setImageUrl(mesh?.image_url || null)
       } else {
-        const { data: urlData } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(fileName)
-        setImageUrl(urlData.publicUrl)
+        setImageUrl(result.url)
       }
     } catch {
       setUploadError('Error al conectar con el servidor de imágenes')

@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBanoProduct, updateBanoProduct } from '@/actions/banos'
-import { createClient } from '@/lib/supabase/client'
+import { uploadImage } from '@/actions/uploads'
 import { BanoProduct, WAREHOUSES } from '@/lib/types'
 import { Camera, Loader2, Save, CheckCircle } from 'lucide-react'
 
@@ -32,20 +32,13 @@ export default function BanoForm({ bano }: BanoFormProps) {
     setUploading(true)
     setUploadError('')
     try {
-      const supabase = createClient()
-      const ext = file.name.split('.').pop()
-      const fileName = `banos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: storageError } = await supabase.storage
-        .from('product-images')
-        .upload(fileName, file, { upsert: false })
-
-      if (storageError) {
-        setUploadError(`No se pudo subir la imagen: ${storageError.message}`)
+      const result = await uploadImage(file, 'banos')
+      if ('error' in result) {
+        setUploadError(result.error)
         setPreview(bano?.image_url || null)
         setImageUrl(bano?.image_url || null)
       } else {
-        const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName)
-        setImageUrl(urlData.publicUrl)
+        setImageUrl(result.url)
       }
     } catch {
       setUploadError('Error al conectar con el servidor de imágenes')

@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createProduct, updateProduct, findProductsByName } from '@/actions/products'
-import { createClient } from '@/lib/supabase/client'
+import { uploadImage } from '@/actions/uploads'
 import { Brand, Size, Product, WAREHOUSES } from '@/lib/types'
 import { Camera, Loader2, Save, CheckCircle, AlertTriangle } from 'lucide-react'
 
@@ -69,26 +69,16 @@ export default function ProductForm({ brands, sizes, product, bodegaStock = [] }
     reader.onloadend = () => setPreview(reader.result as string)
     reader.readAsDataURL(file)
 
-    // Upload directly from browser to Supabase Storage
     setUploading(true)
     setUploadError('')
     try {
-      const supabase = createClient()
-      const ext = file.name.split('.').pop()
-      const fileName = `pisos/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: storageError } = await supabase.storage
-        .from('product-images')
-        .upload(fileName, file, { upsert: false })
-
-      if (storageError) {
-        setUploadError(`No se pudo subir la imagen: ${storageError.message}`)
+      const result = await uploadImage(file, 'pisos')
+      if ('error' in result) {
+        setUploadError(result.error)
         setPreview(null)
         setImageUrl(product?.image_url || null)
       } else {
-        const { data: urlData } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(fileName)
-        setImageUrl(urlData.publicUrl)
+        setImageUrl(result.url)
       }
     } catch {
       setUploadError('Error al conectar con el servidor de imágenes')

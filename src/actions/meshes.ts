@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/adminClient'
 import { requireAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
@@ -71,7 +72,7 @@ export async function getMeshBodegaStock(meshId: string) {
 }
 
 async function recomputeMeshStockTotal(meshId: string) {
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   const { data } = await supabase
     .from('mesh_bodega_stock')
     .select('stock')
@@ -84,7 +85,7 @@ async function recomputeMeshStockTotal(meshId: string) {
 export async function replaceMeshBodegaStock(meshId: string, entries: { bodega: string; stock: number }[]) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
 
   const { error: delError } = await supabase.from('mesh_bodega_stock').delete().eq('mesh_id', meshId)
   if (delError) return { error: delError.message }
@@ -110,7 +111,7 @@ export async function adjustMeshBodegaStock(meshId: string, bodega: string, newS
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
   if (newStock < 0) return { error: 'El stock no puede ser negativo' }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
 
   const { error } = await supabase
     .from('mesh_bodega_stock')
@@ -136,7 +137,7 @@ function parseBodegaEntries(formData: FormData) {
 export async function createMesh(formData: FormData) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
 
   // Image is uploaded client-side; we just receive the resulting public URL
   const imageUrl = (formData.get('image_url') as string) || null
@@ -178,7 +179,7 @@ export async function createMesh(formData: FormData) {
 export async function updateMesh(id: string, formData: FormData) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
 
   // Image is uploaded client-side; we receive the URL (new or existing)
   const imageUrl = (formData.get('image_url') as string) || null
@@ -222,7 +223,7 @@ export async function updateMeshesPriceBulk(
 ) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
 
   const results = await Promise.all(
     updates.map(({ id, price_per_sqm, sqm_per_box }) => {
@@ -243,7 +244,7 @@ export async function updateMeshesPriceBulk(
 export async function deleteMesh(id: string) {
   const authError = await requireAdmin()
   if (authError) return { error: authError.error }
-  const supabase = await createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   const { error } = await supabase.from('meshes').update({ is_active: false }).eq('id', id)
   if (error) return { error: error.message }
   revalidatePath('/mallas')
