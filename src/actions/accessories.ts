@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
 export async function getAccessories(category?: string) {
@@ -45,6 +46,8 @@ async function recomputeAccessoryStockTotal(accessoryId: string) {
 }
 
 export async function replaceAccessoryBodegaStock(accessoryId: string, entries: { bodega: string; stock: number }[]) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
 
   const { error: delError } = await supabase.from('accessory_bodega_stock').delete().eq('accessory_id', accessoryId)
@@ -68,6 +71,8 @@ export async function replaceAccessoryBodegaStock(accessoryId: string, entries: 
 }
 
 export async function adjustAccessoryBodegaStock(accessoryId: string, bodega: string, newStock: number) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   if (newStock < 0) return { error: 'El stock no puede ser negativo' }
   const supabase = await createServerSupabaseClient()
 
@@ -93,6 +98,8 @@ function parseBodegaEntries(formData: FormData) {
 }
 
 export async function createAccessory(formData: FormData) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
 
   // Image is uploaded client-side; we just receive the resulting public URL
@@ -124,6 +131,8 @@ export async function createAccessory(formData: FormData) {
 }
 
 export async function updateAccessory(id: string, formData: FormData) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
 
   const imageUrl = (formData.get('image_url') as string) || null
@@ -154,6 +163,8 @@ export async function updateAccessory(id: string, formData: FormData) {
 }
 
 export async function deleteAccessory(id: string) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
   const { error } = await supabase.from('accessories').update({ is_active: false }).eq('id', id)
   if (error) return { error: error.message }

@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
 export async function getProducts(filters?: {
@@ -83,6 +84,8 @@ async function recomputeProductStockTotal(productId: string) {
 }
 
 export async function replaceProductBodegaStock(productId: string, entries: { bodega: string; stock: number }[]) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
 
   const { error: delError } = await supabase.from('product_bodega_stock').delete().eq('product_id', productId)
@@ -106,6 +109,8 @@ export async function replaceProductBodegaStock(productId: string, entries: { bo
 }
 
 export async function adjustProductBodegaStock(productId: string, bodega: string, newStock: number) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   if (newStock < 0) return { error: 'El stock no puede ser negativo' }
   const supabase = await createServerSupabaseClient()
 
@@ -131,6 +136,8 @@ function parseBodegaEntries(formData: FormData) {
 }
 
 export async function createProduct(formData: FormData) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
 
   // Image is uploaded client-side; we just receive the resulting public URL
@@ -172,6 +179,8 @@ export async function createProduct(formData: FormData) {
 }
 
 export async function updateProduct(id: string, formData: FormData) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
 
   // Image is uploaded client-side; we receive the URL (new or existing)
@@ -215,6 +224,8 @@ export async function updateProduct(id: string, formData: FormData) {
 export async function updateProductsPriceBulk(
   updates: { id: string; price_per_sqm: number; sqm_per_box: number | null }[]
 ) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
 
   const results = await Promise.all(
@@ -234,6 +245,8 @@ export async function updateProductsPriceBulk(
 }
 
 export async function deleteProduct(id: string) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
   const { error } = await supabase.from('products').update({ is_active: false }).eq('id', id)
   if (error) return { error: error.message }

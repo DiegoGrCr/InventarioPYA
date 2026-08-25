@@ -44,6 +44,15 @@ export async function destroyAdminSession() {
   cookieStore.delete(COOKIE_NAME)
 }
 
+// Las Server Actions de Next.js son endpoints invocables directamente (con
+// su propio ID de acción), independientes de cualquier redirect a nivel de
+// página — por eso cada acción que escribe datos debe verificar la sesión
+// aquí dentro, no solo confiar en que la página que la usa esté protegida.
+export async function requireAdmin(): Promise<{ error: string } | null> {
+  if (!(await isAdminSession())) return { error: 'No autorizado' }
+  return null
+}
+
 export async function isAdminSession() {
   const cookieStore = await cookies()
   const raw = cookieStore.get(COOKIE_NAME)?.value

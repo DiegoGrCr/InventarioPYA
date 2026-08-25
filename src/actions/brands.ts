@@ -1,6 +1,7 @@
 'use server'
 
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth'
 import { revalidatePath } from 'next/cache'
 
 export async function getBrands() {
@@ -11,6 +12,8 @@ export async function getBrands() {
 }
 
 export async function createBrand(name: string, isImported: boolean = false) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
   const { error } = await supabase.from('brands').insert({ name, is_imported: isImported })
   if (error) return { error: error.message }
@@ -19,6 +22,8 @@ export async function createBrand(name: string, isImported: boolean = false) {
 }
 
 export async function deleteBrand(id: string) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
   const { error } = await supabase.from('brands').delete().eq('id', id)
   if (error) return { error: error.message }
@@ -34,6 +39,8 @@ export async function getSizes() {
 }
 
 export async function createSize(width: number, height: number) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
   const label = `${width}x${height}`
   const { error } = await supabase.from('sizes').insert({ width, height, label })
@@ -43,6 +50,8 @@ export async function createSize(width: number, height: number) {
 }
 
 export async function deleteSize(id: string) {
+  const authError = await requireAdmin()
+  if (authError) return { error: authError.error }
   const supabase = await createServerSupabaseClient()
   const { error } = await supabase.from('sizes').delete().eq('id', id)
   if (error) return { error: error.message }
