@@ -10,6 +10,11 @@ interface BeforeInstallPromptEvent extends Event {
 
 const DISMISS_KEY = 'pwa-install-dismissed'
 const DISMISS_DAYS = 7
+// Cuánto esperar antes de volver a mostrarlo si no se descartó explícito
+// (ej. se autocerró a los 10s, o el navegador disparó beforeinstallprompt
+// de nuevo) — sin esto podía reaparecer en cada cambio de sección.
+const LAST_SHOWN_KEY = 'pwa-install-last-shown'
+const COOLDOWN_MS = 30 * 60 * 1000
 
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
@@ -26,6 +31,11 @@ export default function InstallPrompt() {
     }, 250)
   }
 
+  const showPrompt = () => {
+    localStorage.setItem(LAST_SHOWN_KEY, Date.now().toString())
+    setShow(true)
+  }
+
   // Se cierra solo a los 10s si nadie interactúa con él
   useEffect(() => {
     if (!show) return
@@ -39,23 +49,28 @@ export default function InstallPrompt() {
     if (window.matchMedia('(display-mode: standalone)').matches) return
     if ((window.navigator as { standalone?: boolean }).standalone) return
 
-    // Descartada recientemente
+    // Descartada explícitamente hace poco
     const dismissed = localStorage.getItem(DISMISS_KEY)
     if (dismissed && Date.now() - parseInt(dismissed) < DISMISS_DAYS * 86400000) return
+
+    // Ya se mostró hace poco (se haya cerrado como sea) — evita que reaparezca
+    // en cada cambio de sección si algo dispara beforeinstallprompt de nuevo.
+    const lastShown = localStorage.getItem(LAST_SHOWN_KEY)
+    if (lastShown && Date.now() - parseInt(lastShown) < COOLDOWN_MS) return
 
     const ios = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase())
     setIsIOS(ios)
 
     if (ios) {
       // En iOS no hay beforeinstallprompt, mostramos instrucciones manuales
-      setTimeout(() => setShow(true), 3000)
+      setTimeout(() => showPrompt(), 3000)
       return
     }
 
     const handler = (e: Event) => {
       e.preventDefault()
       setDeferredPrompt(e as BeforeInstallPromptEvent)
-      setShow(true)
+      showPrompt()
     }
     window.addEventListener('beforeinstallprompt', handler)
     return () => window.removeEventListener('beforeinstallprompt', handler)
