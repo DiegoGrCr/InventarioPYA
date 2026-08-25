@@ -5,7 +5,13 @@ const COOKIE_NAME = 'admin_session'
 const MAX_AGE = 60 * 60 * 24 * 30 // 30 días
 
 function getSecret() {
-  return process.env.SESSION_SECRET || ''
+  const secret = process.env.SESSION_SECRET
+  // Sin esto, un despliegue con la variable faltante firmaría/verificaría
+  // sesiones con una llave vacía predecible — cualquiera podría forjar una
+  // cookie de admin válida calculando el HMAC con clave ''. Mejor tronar
+  // fuerte que dejar el sitio abierto en silencio.
+  if (!secret) throw new Error('SESSION_SECRET no está configurado')
+  return secret
 }
 
 function sign(payload: string) {

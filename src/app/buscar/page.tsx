@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Image from 'next/image'
-import { formatPrice } from '@/lib/utils'
+import { formatPrice, likeSafe } from '@/lib/utils'
 import { Layers, Toilet, Package, Search } from 'lucide-react'
 
 export default async function BuscarPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
@@ -28,6 +28,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
 
   const supabase = await createServerSupabaseClient()
   const like = `%${query}%`
+  const likeOr = likeSafe(query)
 
   // Las medidas (ej. "20x20") viven en una tabla aparte (sizes), así que
   // buscamos primero los tamaños cuya etiqueta coincide para poder filtrar
@@ -43,17 +44,17 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
     supabase.from('products')
       .select('id, name, image_url, price_per_sqm, stock, brand:brands(name), size:sizes(label)')
       .eq('is_active', true)
-      .or(`name.ilike.${like},description.ilike.${like},color.ilike.${like},finish.ilike.${like}${sizeFilter}`)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},color.ilike.${likeOr},finish.ilike.${likeOr}${sizeFilter}`)
       .limit(200),
     supabase.from('bano_products')
       .select('id, name, image_url, price, stock, brand, model')
       .eq('is_active', true)
-      .or(`name.ilike.${like},description.ilike.${like},brand.ilike.${like},model.ilike.${like},color.ilike.${like}`)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},brand.ilike.${likeOr},model.ilike.${likeOr},color.ilike.${likeOr}`)
       .limit(200),
     supabase.from('accessories')
       .select('id, name, image_url, price, stock, category, brand')
       .eq('is_active', true)
-      .or(`name.ilike.${like},description.ilike.${like},brand.ilike.${like},color.ilike.${like}`)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},brand.ilike.${likeOr},color.ilike.${likeOr}`)
       .limit(200),
   ])
 

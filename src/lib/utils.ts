@@ -1,3 +1,13 @@
+// Para interpolar texto de usuario dentro de un filtro .or(...) de PostgREST
+// (ej. `name.ilike.${likeSafe(q)}`) sin que comas/paréntesis en ese texto se
+// interpreten como sintaxis de PostgREST e inyecten condiciones adicionales.
+// Encerrar el valor entre comillas lo trata como literal — el wildcard % del
+// ILIKE sigue funcionando normalmente dentro de las comillas.
+export function likeSafe(raw: string): string {
+  const escaped = raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  return `"%${escaped}%"`
+}
+
 export function formatPrice(price: number | null): string {
   if (price === null) return 'Sin precio'
   return new Intl.NumberFormat('es-MX', {

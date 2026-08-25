@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { likeSafe } from '@/lib/utils'
 
 const SYSTEM_PROMPT = `Eres el asistente virtual de "Pisos y Azulejos de Jalpan", una tienda de pisos, azulejos y baños.
 
@@ -148,7 +149,7 @@ async function buscarPisos(args: { texto?: string; material?: string; marca?: st
   // Igual que el buscador general de la página (/buscar): busca en nombre,
   // descripción y acabado a la vez, no solo en el nombre exacto.
   if (args.texto) {
-    const like = `%${args.texto}%`
+    const like = likeSafe(args.texto)
     query = query.or(`name.ilike.${like},description.ilike.${like},finish.ilike.${like}`)
   }
   if (args.material === 'ceramica' || args.material === 'porcelana') query = query.eq('material', args.material)
@@ -157,7 +158,7 @@ async function buscarPisos(args: { texto?: string; material?: string; marca?: st
   // mezclada (ej. "gris y negro") a veces solo mencionan el segundo color en
   // la descripción — por eso buscamos en ambos lados, no solo en la columna.
   if (args.color) {
-    const like = `%${args.color}%`
+    const like = likeSafe(args.color)
     query = query.or(`color.ilike.${like},description.ilike.${like}`)
   }
 

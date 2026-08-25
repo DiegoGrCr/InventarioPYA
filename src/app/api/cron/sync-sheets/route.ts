@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { syncAllBodegas } from '@/lib/sheetSync'
 
 // googleapis firma JWT con Node crypto — no corre en el runtime Edge.
@@ -13,9 +14,15 @@ export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 
+function isValidCronSecret(auth: string | null): boolean {
+  if (!process.env.CRON_SECRET || !auth) return false
+  const expected = Buffer.from(`Bearer ${process.env.CRON_SECRET}`)
+  const actual = Buffer.from(auth)
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual)
+}
+
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get('authorization')
-  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isValidCronSecret(req.headers.get('authorization'))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
