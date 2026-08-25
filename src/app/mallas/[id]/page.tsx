@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { isAdminSession } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { formatPrice, getStockStatus, getStockLabel } from '@/lib/utils'
 import { Pencil, Grid3x3 } from 'lucide-react'
 import MeshBodegaStockControl from '@/components/meshes/MeshBodegaStockControl'
@@ -49,7 +50,7 @@ export default async function MeshDetailPage({ params }: { params: Promise<{ id:
       <div className="detail-grid">
         <div className="detail-image">
           {mesh.image_url ? (
-            <img src={mesh.image_url} alt={mesh.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', padding: '20px' }} />
+            <Image src={mesh.image_url} alt={mesh.name} fill sizes="(max-width: 768px) 100vw, 500px" priority style={{ objectFit: 'contain', padding: '20px' }} />
           ) : (
             <div className="card-image-placeholder" style={{ borderRadius: 'var(--radius)', height: '100%' }}><Grid3x3 size={72} strokeWidth={1} /></div>
           )}

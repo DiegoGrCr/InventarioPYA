@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { isAdminSession } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { formatPrice, getStockStatus, getStockLabel } from '@/lib/utils'
 import { Pencil, Rows3 } from 'lucide-react'
 import CenefaBodegaStockControl from '@/components/cenefas/CenefaBodegaStockControl'
@@ -49,7 +50,7 @@ export default async function CenefaDetailPage({ params }: { params: Promise<{ i
       <div className="detail-grid">
         <div className="detail-image">
           {cenefa.image_url ? (
-            <img src={cenefa.image_url} alt={cenefa.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', padding: '20px' }} />
+            <Image src={cenefa.image_url} alt={cenefa.name} fill sizes="(max-width: 768px) 100vw, 500px" priority style={{ objectFit: 'contain', padding: '20px' }} />
           ) : (
             <div className="card-image-placeholder" style={{ borderRadius: 'var(--radius)', height: '100%' }}><Rows3 size={72} strokeWidth={1} /></div>
           )}

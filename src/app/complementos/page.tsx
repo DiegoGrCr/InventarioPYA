@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { isAdminSession } from '@/lib/auth'
 import Link from 'next/link'
+import Image from 'next/image'
 import { formatPrice, getStockStatus, getStockLabel, getCategoryLabel } from '@/lib/utils'
 import AccessoryTabs from '@/components/accessories/AccessoryTabs'
 import { Droplets, PaintBucket, Plus } from 'lucide-react'
@@ -39,7 +40,7 @@ export default async function AccesoriosPage({ searchParams }: { searchParams: P
               <Link key={acc.id} href={`/complementos/${acc.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
                 <div className="card-image-wrapper">
                   {acc.image_url ? (
-                    <img src={acc.image_url} alt={acc.name} className="card-image" />
+                    <Image src={acc.image_url} alt={acc.name} fill sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 280px" loading="lazy" className="card-image" />
                   ) : (
                     <div className="card-image-placeholder">{tab === 'adhesivo' ? <Droplets size={48} strokeWidth={1} /> : <PaintBucket size={48} strokeWidth={1} />}</div>
                   )}

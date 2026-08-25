@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { isAdminSession } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { formatPrice, getMaterialLabel, getStockStatus, getStockLabel } from '@/lib/utils'
 import { Pencil, Layers } from 'lucide-react'
 import ProductBodegaStockControl from '@/components/products/ProductBodegaStockControl'
@@ -49,7 +50,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       <div className="detail-grid">
         <div className="detail-image">
           {product.image_url ? (
-            <img src={product.image_url} alt={product.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', padding: '20px' }} />
+            <Image src={product.image_url} alt={product.name} fill sizes="(max-width: 768px) 100vw, 500px" priority style={{ objectFit: 'contain', padding: '20px' }} />
           ) : (
             <div className="card-image-placeholder" style={{ borderRadius: 'var(--radius)', height: '100%' }}><Layers size={72} strokeWidth={1} /></div>
           )}

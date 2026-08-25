@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { isAdminSession } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { formatPrice, getStockStatus, getStockLabel } from '@/lib/utils'
 import { Pencil, Toilet } from 'lucide-react'
 import BanoStockControl from '@/components/banos/BanoStockControl'
@@ -51,7 +52,7 @@ export default async function BanoDetailPage({ params }: { params: Promise<{ id:
       <div className="detail-grid">
         <div className="detail-image">
           {bano.image_url ? (
-            <img src={bano.image_url} alt={bano.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', padding: '20px' }} />
+            <Image src={bano.image_url} alt={bano.name} fill sizes="(max-width: 768px) 100vw, 500px" priority style={{ objectFit: 'contain', padding: '20px' }} />
           ) : (
             <div className="card-image-placeholder" style={{ borderRadius: 'var(--radius)', height: '100%' }}>
               <Toilet size={72} strokeWidth={1} />

@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Search, Layers, Grid3x3, Toilet, Package, ArrowRight, Calculator } from 'lucide-react'
 
 export const revalidate = 60
@@ -119,7 +120,7 @@ export default async function HomePage() {
         <div className="home-section-label">Nuestro catálogo</div>
         <div className="home-categories">
           <Link href="/pisos" className="home-category-panel">
-            {pisos[0]?.image_url && <img src={pisos[0].image_url} alt="" className="home-category-panel-img" />}
+            {pisos[0]?.image_url && <Image src={pisos[0].image_url} alt="" fill sizes="(max-width: 768px) 50vw, 25vw" className="home-category-panel-img" priority />}
             <div className="home-category-panel-overlay" />
             <div className="home-category-panel-content">
               <span className="home-category-panel-icon"><Layers size={20} /></span>
@@ -129,7 +130,7 @@ export default async function HomePage() {
             </div>
           </Link>
           <Link href="/mallas" className="home-category-panel">
-            {mallas[0]?.image_url && <img src={mallas[0].image_url} alt="" className="home-category-panel-img" />}
+            {mallas[0]?.image_url && <Image src={mallas[0].image_url} alt="" fill sizes="(max-width: 768px) 50vw, 25vw" className="home-category-panel-img" />}
             <div className="home-category-panel-overlay" />
             <div className="home-category-panel-content">
               <span className="home-category-panel-icon"><Grid3x3 size={20} /></span>
@@ -139,7 +140,7 @@ export default async function HomePage() {
             </div>
           </Link>
           <Link href="/banos" className="home-category-panel">
-            {banos[0]?.image_url && <img src={banos[0].image_url} alt="" className="home-category-panel-img" />}
+            {banos[0]?.image_url && <Image src={banos[0].image_url} alt="" fill sizes="(max-width: 768px) 50vw, 25vw" className="home-category-panel-img" />}
             <div className="home-category-panel-overlay" />
             <div className="home-category-panel-content">
               <span className="home-category-panel-icon"><Toilet size={20} /></span>
@@ -149,7 +150,7 @@ export default async function HomePage() {
             </div>
           </Link>
           <Link href="/complementos" className="home-category-panel">
-            {accesorios[0]?.image_url && <img src={accesorios[0].image_url} alt="" className="home-category-panel-img" />}
+            {accesorios[0]?.image_url && <Image src={accesorios[0].image_url} alt="" fill sizes="(max-width: 768px) 50vw, 25vw" className="home-category-panel-img" />}
             <div className="home-category-panel-overlay" />
             <div className="home-category-panel-content">
               <span className="home-category-panel-icon"><Package size={20} /></span>
@@ -198,7 +199,7 @@ export default async function HomePage() {
               {pisosLoop.map((p, i) => (
                 <Link key={`${p.id}-${i}`} href={`/pisos/${p.id}`} className="card marquee-card">
                   <div className="card-image-wrapper">
-                    <img src={p.image_url!} alt={p.name} className="card-image" />
+                    <Image src={p.image_url!} alt={p.name} fill sizes="220px" className="card-image" />
                     {p.size && <span className="card-image-size-badge">{(p.size as unknown as { label: string }).label}</span>}
                   </div>
                   <div className="card-body">
@@ -221,7 +222,7 @@ export default async function HomePage() {
               {mallasLoop.map((m, i) => (
                 <Link key={`${m.id}-${i}`} href={`/mallas/${m.id}`} className="card marquee-card">
                   <div className="card-image-wrapper">
-                    <img src={m.image_url!} alt={m.name} className="card-image" />
+                    <Image src={m.image_url!} alt={m.name} fill sizes="220px" className="card-image" />
                     {m.size && <span className="card-image-size-badge">{(m.size as unknown as { label: string }).label}</span>}
                   </div>
                   <div className="card-body">
@@ -244,7 +245,7 @@ export default async function HomePage() {
               {banosLoop.map((b, i) => (
                 <Link key={`${b.id}-${i}`} href={`/banos/${b.id}`} className="card marquee-card">
                   <div className="card-image-wrapper">
-                    <img src={b.image_url!} alt={b.name} className="card-image" />
+                    <Image src={b.image_url!} alt={b.name} fill sizes="220px" className="card-image" />
                     {b.brand && <span className="card-image-size-badge">{b.brand}</span>}
                   </div>
                   <div className="card-body">
@@ -267,7 +268,7 @@ export default async function HomePage() {
               {accLoop.map((a, i) => (
                 <Link key={`${a.id}-${i}`} href={`/complementos/${a.id}`} className="card marquee-card">
                   <div className="card-image-wrapper">
-                    <img src={a.image_url!} alt={a.name} className="card-image" />
+                    <Image src={a.image_url!} alt={a.name} fill sizes="220px" className="card-image" />
                     <span className="card-image-size-badge">{a.category === 'boquilla' ? 'Boquilla' : 'Adhesivo'}</span>
                   </div>
                   <div className="card-body">

@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import Image from 'next/image'
 import { formatPrice } from '@/lib/utils'
 import { Layers, Toilet, Package, Search } from 'lucide-react'
 
@@ -89,7 +90,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
               <Link key={p.id} href={`/pisos/${p.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
                 <div className="card-image-wrapper">
                   {p.image_url
-                    ? <img src={p.image_url} alt={p.name} className="card-image" />
+                    ? <Image src={p.image_url} alt={p.name} fill sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 280px" loading="lazy" className="card-image" />
                     : <div className="card-image-placeholder"><Layers size={48} strokeWidth={1} /></div>}
                   {p.size && <span className="card-image-size-badge">{(p.size as unknown as { label: string }).label}</span>}
                 </div>
@@ -122,7 +123,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
               <Link key={b.id} href={`/banos/${b.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
                 <div className="card-image-wrapper">
                   {b.image_url
-                    ? <img src={b.image_url} alt={b.name} className="card-image" />
+                    ? <Image src={b.image_url} alt={b.name} fill sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 280px" loading="lazy" className="card-image" />
                     : <div className="card-image-placeholder"><Toilet size={48} strokeWidth={1} /></div>}
                 </div>
                 <div className="card-body">
@@ -151,7 +152,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
               <Link key={c.id} href={`/complementos/${c.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
                 <div className="card-image-wrapper">
                   {c.image_url
-                    ? <img src={c.image_url} alt={c.name} className="card-image" />
+                    ? <Image src={c.image_url} alt={c.name} fill sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 280px" loading="lazy" className="card-image" />
                     : <div className="card-image-placeholder"><Package size={48} strokeWidth={1} /></div>}
                 </div>
                 <div className="card-body">

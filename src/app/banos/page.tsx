@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { isAdminSession } from '@/lib/auth'
 import Link from 'next/link'
+import Image from 'next/image'
 import { formatPrice, getStockStatus, getStockLabel } from '@/lib/utils'
 import { Toilet, Plus } from 'lucide-react'
 
@@ -33,7 +34,7 @@ export default async function BanosPage() {
               <Link key={bano.id} href={`/banos/${bano.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
                 <div className="card-image-wrapper">
                   {bano.image_url ? (
-                    <img src={bano.image_url} alt={bano.name} className="card-image" />
+                    <Image src={bano.image_url} alt={bano.name} fill sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 280px" loading="lazy" className="card-image" />
                   ) : (
                     <div className="card-image-placeholder"><Toilet size={48} strokeWidth={1} /></div>
                   )}

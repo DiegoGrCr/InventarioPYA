@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { isAdminSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Layers, Package, AlertTriangle, Tag, PackageOpen, Plus, Ruler, Calculator, Toilet, Grid3x3, Rows3 } from 'lucide-react'
 
 export default async function DashboardPage() {
@@ -107,7 +108,7 @@ export default async function DashboardPage() {
             <Link key={p.id} href={`/pisos/${p.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
               <div className="card-image-wrapper">
                 {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} className="card-image" />
+                  <Image src={p.image_url} alt={p.name} fill sizes="280px" className="card-image" />
                 ) : (
                   <div className="card-image-placeholder"><Layers size={48} strokeWidth={1} /></div>
                 )}

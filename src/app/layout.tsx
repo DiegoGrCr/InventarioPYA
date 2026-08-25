@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import AppShell from '@/components/layout/AppShell'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
@@ -7,6 +8,13 @@ import AssistantWidget from '@/components/AssistantWidget'
 import { AdminProvider } from '@/contexts/AdminContext'
 import { isAdminSession } from '@/lib/auth'
 import { Analytics } from '@vercel/analytics/next'
+
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700', '800', '900'],
+  variable: '--font-inter',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'Pisos y Azulejos de Jalpan',
@@ -22,7 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const isAdmin = await isAdminSession()
 
   return (
-    <html lang="es">
+    <html lang="es" className={inter.variable}>
       <head>
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="theme-color" content="#6366f1" />
