@@ -59,7 +59,7 @@ async function fetchMeshMasterData(supabase: ReturnType<typeof createPlainSupaba
 // mode 4 = tamaño fijo en píxeles, para que todas las fotos midan lo mismo en
 // la tabla sin importar el tamaño real de la imagen subida en la página.
 function imageFormula(url: string | null): string {
-  return url ? `=IMAGE("${url}",4,50,50)` : ''
+  return url ? `=IMAGE("${url}",4,100,100)` : ''
 }
 
 function sortMeshRows(rows: MeshMasterRow[]): MeshMasterRow[] {

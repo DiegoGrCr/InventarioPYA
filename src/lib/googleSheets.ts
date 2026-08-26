@@ -738,16 +738,16 @@ export function buildMeshZeroStockHighlightRequest(sheetId: number): sheets_v4.S
 export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$Request[] {
   const style = { style: 'SOLID' as const, color: hexToRgb(COLORS.border) }
   const widths: [number, number][] = [
-    [COL_MESH.FOTO, 64], [COL_MESH.MARCA, 110], [COL_MESH.FORMATO, 80], [COL_MESH.SKU, 110], [COL_MESH.DESCRIPCION, 220],
+    [COL_MESH.FOTO, 114], [COL_MESH.MARCA, 110], [COL_MESH.FORMATO, 80], [COL_MESH.SKU, 110], [COL_MESH.DESCRIPCION, 220],
     [COL_MESH.PIEZAS_X_CAJA, 100], [COL_MESH.M2_X_CAJA, 90], [COL_MESH.CAJAS_EN_EXISTENCIA, 150],
     [COL_MESH.PRECIO, 100],
   ]
   return [
-    // Filas más altas para que la foto (IMAGE con alto fijo de 50px) se vea
+    // Filas más altas para que la foto (IMAGE con alto fijo de 100px) se vea
     // completa — el alto de fila por default de Sheets (~21px) la recortaría.
     { updateDimensionProperties: {
       range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: STYLE_LAST_ROW },
-      properties: { pixelSize: 58 },
+      properties: { pixelSize: 108 },
       fields: 'pixelSize',
     } },
     { repeatCell: {
