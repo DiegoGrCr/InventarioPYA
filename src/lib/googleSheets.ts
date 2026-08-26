@@ -76,6 +76,13 @@ export function rowRange(title: string, startRow1: number, endRow1: number): str
   return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL.LAST_SYNCED_PRICE)}${endRow1}`
 }
 
+// Rango de una sola columna a lo largo de varias filas (ej. escribir solo la
+// columna FOTO para todas las filas en una sola llamada, en vez de celda por
+// celda) — genérico, no depende del layout de ningún tipo de pestaña.
+export function colRange(title: string, col0: number, startRow1: number, endRow1: number): string {
+  return `${quoteTitle(title)}!${colLetter(col0)}${startRow1}:${colLetter(col0)}${endRow1}`
+}
+
 export interface TabInfo { sheetId: number; title: string }
 
 export async function listTabs(sheets: sheets_v4.Sheets, spreadsheetId: string): Promise<TabInfo[]> {
@@ -105,11 +112,16 @@ export async function batchGetTabValues(sheets: sheets_v4.Sheets, spreadsheetId:
   return result
 }
 
-export async function batchWriteCells(sheets: sheets_v4.Sheets, spreadsheetId: string, writes: { range: string; values: (string | number)[][] }[]): Promise<void> {
+// RAW por default: todo el resto del contenido (SKU, nombres, precios...) se
+// escribe literal a propósito, para que Sheets nunca intente "interpretar"
+// texto normal como fecha/número/fórmula. USER_ENTERED solo se usa puntualmente
+// (ver imageFormula en meshSheetSync.ts) donde sí queremos que una celda que
+// empieza con "=" se evalúe como fórmula en vez de guardarse como texto plano.
+export async function batchWriteCells(sheets: sheets_v4.Sheets, spreadsheetId: string, writes: { range: string; values: (string | number)[][] }[], valueInputOption: 'RAW' | 'USER_ENTERED' = 'RAW'): Promise<void> {
   if (writes.length === 0) return
   await sheets.spreadsheets.values.batchUpdate({
     spreadsheetId,
-    requestBody: { valueInputOption: 'RAW', data: writes.map(w => ({ range: w.range, values: w.values })) },
+    requestBody: { valueInputOption, data: writes.map(w => ({ range: w.range, values: w.values })) },
   })
 }
 

@@ -5,7 +5,7 @@ import {
   listTabs, batchGetTabValues, batchWriteCells, batchClearTabs,
   applyStructuralRequests, createMissingTabs, buildMeshProtectionRequests,
   buildMeshHideColumnsRequest, buildFreezeHeaderRequest, buildMeshZeroStockHighlightRequest,
-  buildMeshRepeatableStyleRequests, cellRange, rowRangeMesh,
+  buildMeshRepeatableStyleRequests, cellRange, rowRangeMesh, colRange,
   getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
   COL_MESH, HEADERS_MESH, MESH_TAB_NAME, TabInfo, CellValue,
 } from './googleSheets'
@@ -226,10 +226,18 @@ async function applyMeshPulls(
 // -------- Fase B: reconciliar la pestaña contra los datos ya actualizados --------
 
 function buildMeshTabContentValues(rows: MeshMasterRow[]): (string | number)[][] {
+  // FOTO (col 0) va en blanco aquí a propósito: este arreglo se escribe con
+  // RAW (ver batchWriteCells), que guardaría la fórmula =IMAGE(...) como
+  // texto literal en vez de evaluarla. Se llena aparte con
+  // buildMeshFotoValues() en una llamada separada con USER_ENTERED.
   return sortMeshRows(rows).map(it => [
-    imageFormula(it.imageUrl), it.brand || 'Sin marca', it.formato || '', it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
+    '', it.brand || 'Sin marca', it.formato || '', it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
     it.meshId, it.name, it.precio ?? '',
   ])
+}
+
+function buildMeshFotoValues(rows: MeshMasterRow[]): string[][] {
+  return sortMeshRows(rows).map(it => [imageFormula(it.imageUrl)])
 }
 
 export interface MeshBodegaResult { bodega: string; rebuilt: boolean; cellsWritten: number; error?: string; needsReview?: boolean }
@@ -264,6 +272,11 @@ async function reconcileMeshBodega(
 
   const structural: sheets_v4.Schema$Request[] = []
   const writes: { range: string; values: (string | number)[][] }[] = []
+  // Aparte del resto: =IMAGE(...) solo se evalúa como fórmula si se escribe
+  // con USER_ENTERED, pero eso mismo arriesgaría que Sheets "interprete" mal
+  // el resto de las columnas (ej. un SKU o nombre que por casualidad se vea
+  // como fecha/número) — así que estas van en su propia llamada.
+  const fotoWrites: { range: string; values: string[][] }[] = []
   const toClear: string[] = []
   let rebuilt = false
 
@@ -283,7 +296,10 @@ async function reconcileMeshBodega(
   if (structurallyDifferent) {
     if (!isNewTab) toClear.push(MESH_TAB_NAME)
     const values = buildMeshTabContentValues(freshRows)
-    if (values.length > 0) writes.push({ range: rowRangeMesh(MESH_TAB_NAME, 2, 1 + values.length), values })
+    if (values.length > 0) {
+      writes.push({ range: rowRangeMesh(MESH_TAB_NAME, 2, 1 + values.length), values })
+      fotoWrites.push({ range: colRange(MESH_TAB_NAME, COL_MESH.FOTO, 2, 1 + values.length), values: buildMeshFotoValues(freshRows) })
+    }
     rebuilt = true
   } else {
     const byId = new Map(freshRows.map(r => [r.meshId, r]))
@@ -294,7 +310,7 @@ async function reconcileMeshBodega(
       // MARCA), así que se reaplica siempre en vez de compararla — barato y
       // garantiza que quede al día si la imagen cambió en la página sin que
       // hubiera altas/bajas que dispararan una reconstrucción completa.
-      writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.FOTO, row.rowIndex1), values: [[imageFormula(authoritative.imageUrl)]] })
+      fotoWrites.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.FOTO, row.rowIndex1), values: [[imageFormula(authoritative.imageUrl)]] })
       if (row.name !== authoritative.name) {
         writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.DESCRIPCION, row.rowIndex1), values: [[authoritative.name]] })
       }
@@ -313,12 +329,13 @@ async function reconcileMeshBodega(
     }
   }
 
-  console.log(`[sync-mesh ${invocationId}] write bodega=${config.bodega} spreadsheetId=${config.spreadsheetId} rebuilt=${rebuilt} writes=${writes.length}`)
+  console.log(`[sync-mesh ${invocationId}] write bodega=${config.bodega} spreadsheetId=${config.spreadsheetId} rebuilt=${rebuilt} writes=${writes.length + fotoWrites.length}`)
   await batchClearTabs(sheets, config.spreadsheetId, toClear)
   await applyStructuralRequests(sheets, config.spreadsheetId, structural)
   await batchWriteCells(sheets, config.spreadsheetId, writes)
+  await batchWriteCells(sheets, config.spreadsheetId, fotoWrites, 'USER_ENTERED')
 
-  return { bodega: config.bodega, rebuilt, cellsWritten: writes.length }
+  return { bodega: config.bodega, rebuilt, cellsWritten: writes.length + fotoWrites.length }
 }
 
 // Mismo criterio de seguridad que assertBodegaMembership en sheetSync.ts: antes
