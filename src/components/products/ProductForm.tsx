@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createProduct, updateProduct, findProductsByName } from '@/actions/products'
 import { uploadImage } from '@/actions/uploads'
@@ -60,10 +60,7 @@ export default function ProductForm({ brands, sizes, product, bodegaStock = [] }
     ? (parseFloat(computedPricePerBox) * parseFloat(piecesPerBox)).toFixed(2)
     : null
 
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
+  const processImageFile = async (file: File) => {
     // Show local preview immediately
     const reader = new FileReader()
     reader.onloadend = () => setPreview(reader.result as string)
@@ -88,6 +85,28 @@ export default function ProductForm({ brands, sizes, product, bodegaStock = [] }
       setUploading(false)
     }
   }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) processImageFile(file)
+  }
+
+  // Permite pegar una imagen copiada (Ctrl+V) en vez de solo seleccionar un
+  // archivo — si el portapapeles no trae una imagen, no hace nada y el pegado
+  // normal (ej. en un campo de texto) sigue funcionando igual.
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (uploading) return
+      const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image/'))
+      const file = item?.getAsFile()
+      if (!file) return
+      e.preventDefault()
+      processImageFile(file)
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploading])
 
   const handleRemoveImage = () => {
     setPreview(null)
@@ -144,7 +163,7 @@ export default function ProductForm({ brands, sizes, product, bodegaStock = [] }
         ) : (
           <label className="image-upload" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
             <div className="image-upload-icon">{uploading ? <Loader2 size={32} className="spin" /> : <Camera size={32} />}</div>
-            <p>{uploading ? 'Subiendo imagen...' : 'Click para subir imagen'}</p>
+            <p>{uploading ? 'Subiendo imagen...' : 'Click para subir, o pega con Ctrl+V'}</p>
             <small>JPG, PNG. Max 5MB</small>
             <input
               type="file"
