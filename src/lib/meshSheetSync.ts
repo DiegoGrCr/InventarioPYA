@@ -22,6 +22,7 @@ interface MeshMasterRow {
   m2: number | null
   precio: number | null
   stock: number
+  imageUrl: string | null
 }
 
 async function fetchMeshMasterData(supabase: ReturnType<typeof createPlainSupabaseClient>, bodegas: string[]): Promise<Map<string, MeshMasterRow[]>> {
@@ -31,7 +32,7 @@ async function fetchMeshMasterData(supabase: ReturnType<typeof createPlainSupaba
 
   const { data, error } = await supabase
     .from('mesh_bodega_stock')
-    .select('bodega, stock, mesh:meshes!inner(id, name, sku, price_per_sqm, pieces_per_box, sqm_per_box, sale_unit, is_active, brand:brands(name), size:sizes(label))')
+    .select('bodega, stock, mesh:meshes!inner(id, name, sku, price_per_sqm, pieces_per_box, sqm_per_box, sale_unit, is_active, image_url, brand:brands(name), size:sizes(label))')
     .in('bodega', bodegas)
     .eq('mesh.is_active', true)
 
@@ -39,7 +40,7 @@ async function fetchMeshMasterData(supabase: ReturnType<typeof createPlainSupaba
 
   interface MeshJoin {
     id: string; name: string; sku: string | null; price_per_sqm: number | null; pieces_per_box: number | null
-    sqm_per_box: number | null; brand: { name: string } | null; size: { label: string } | null
+    sqm_per_box: number | null; image_url: string | null; brand: { name: string } | null; size: { label: string } | null
   }
 
   ;(data || []).forEach(row => {
@@ -49,10 +50,16 @@ async function fetchMeshMasterData(supabase: ReturnType<typeof createPlainSupaba
     if (!list) return
     list.push({
       meshId: m.id, name: m.name, brand: m.brand?.name || '', formato: m.size?.label || '', sku: m.sku,
-      piezas: m.pieces_per_box, m2: m.sqm_per_box, precio: m.price_per_sqm, stock: row.stock,
+      piezas: m.pieces_per_box, m2: m.sqm_per_box, precio: m.price_per_sqm, stock: row.stock, imageUrl: m.image_url,
     })
   })
   return result
+}
+
+// mode 4 = tamaño fijo en píxeles, para que todas las fotos midan lo mismo en
+// la tabla sin importar el tamaño real de la imagen subida en la página.
+function imageFormula(url: string | null): string {
+  return url ? `=IMAGE("${url}",4,50,50)` : ''
 }
 
 function sortMeshRows(rows: MeshMasterRow[]): MeshMasterRow[] {
@@ -220,7 +227,7 @@ async function applyMeshPulls(
 
 function buildMeshTabContentValues(rows: MeshMasterRow[]): (string | number)[][] {
   return sortMeshRows(rows).map(it => [
-    it.brand || 'Sin marca', it.formato || '', it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
+    imageFormula(it.imageUrl), it.brand || 'Sin marca', it.formato || '', it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
     it.meshId, it.name, it.precio ?? '',
   ])
 }
@@ -283,6 +290,11 @@ async function reconcileMeshBodega(
     for (const row of actualRows) {
       const authoritative = byId.get(row.meshId)
       if (!authoritative) continue
+      // La foto no se lee de vuelta de la hoja (es de solo escritura, como
+      // MARCA), así que se reaplica siempre en vez de compararla — barato y
+      // garantiza que quede al día si la imagen cambió en la página sin que
+      // hubiera altas/bajas que dispararan una reconstrucción completa.
+      writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.FOTO, row.rowIndex1), values: [[imageFormula(authoritative.imageUrl)]] })
       if (row.name !== authoritative.name) {
         writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.DESCRIPCION, row.rowIndex1), values: [[authoritative.name]] })
       }

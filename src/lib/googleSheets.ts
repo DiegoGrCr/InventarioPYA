@@ -622,21 +622,22 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
 // columna MARCA visible ya que no hay pestaña que la reemplace.
 
 export const COL_MESH = {
-  MARCA: 0,
-  FORMATO: 1,
-  SKU: 2,
-  DESCRIPCION: 3,
-  PIEZAS_X_CAJA: 4,
-  M2_X_CAJA: 5,
-  CAJAS_EN_EXISTENCIA: 6,
-  PRECIO: 7,
-  MESH_ID: 8,
-  LAST_SYNCED_NAME: 9,
-  LAST_SYNCED_PRICE: 10,
+  FOTO: 0,
+  MARCA: 1,
+  FORMATO: 2,
+  SKU: 3,
+  DESCRIPCION: 4,
+  PIEZAS_X_CAJA: 5,
+  M2_X_CAJA: 6,
+  CAJAS_EN_EXISTENCIA: 7,
+  PRECIO: 8,
+  MESH_ID: 9,
+  LAST_SYNCED_NAME: 10,
+  LAST_SYNCED_PRICE: 11,
 } as const
 
 export const HEADERS_MESH = [
-  'MARCA', 'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
+  'FOTO', 'MARCA', 'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
   '_mesh_id', '_last_synced_name', '_last_synced_price',
 ]
 
@@ -648,17 +649,21 @@ export function rowRangeMesh(title: string, startRow1: number, endRow1: number):
   return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_MESH.LAST_SYNCED_PRICE)}${endRow1}`
 }
 
-const VISIBLE_COLS_MESH = { startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.PRECIO + 1 }
+const VISIBLE_COLS_MESH = { startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.PRECIO + 1 }
+// Rango solo para el resaltado de stock 0 — arranca en MARCA (no en FOTO) para
+// no pintar la celda de la foto de rojo, ver el mismo criterio aplicado en
+// Pisos (ZERO_STOCK_HIGHLIGHT_COLS) para columnas que no deben entrar ahí.
+const MESH_ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.PRECIO + 1 }
 
-// Protege MARCA+FORMATO+SKU, PIEZAS/M2, PRECIO, la fila de encabezados y las
-// columnas ocultas — solo DESCRIPCIÓN/CAJAS EN EXISTENCIA quedan libres para
-// el personal (mismo criterio que Pisos).
+// Protege FOTO+MARCA+FORMATO+SKU, PIEZAS/M2, PRECIO, la fila de encabezados y
+// las columnas ocultas — solo DESCRIPCIÓN/CAJAS EN EXISTENCIA quedan libres
+// para el personal (mismo criterio que Pisos).
 export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
   return [
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.SKU + 1 },
-      description: 'MARCA/FORMATO/SKU - solo lectura', warningOnly: false, editors,
+      range: { sheetId, startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.SKU + 1 },
+      description: 'FOTO/MARCA/FORMATO/SKU - solo lectura', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startColumnIndex: COL_MESH.PIEZAS_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
@@ -673,7 +678,7 @@ export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.PRECIO + 1 },
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.PRECIO + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
     // Protección de la PESTAÑA completa — ver el equivalente de Pisos
@@ -693,7 +698,7 @@ export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail
 export function buildMeshHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request[] {
   return [
     { updateDimensionProperties: {
-      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_MESH.MARCA, endIndex: COL_MESH.MESH_ID },
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_MESH.FOTO, endIndex: COL_MESH.MESH_ID },
       properties: { hiddenByUser: false },
       fields: 'hiddenByUser',
     } },
@@ -708,7 +713,7 @@ export function buildMeshHideColumnsRequest(sheetId: number): sheets_v4.Schema$R
 export function buildMeshZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
   return { addConditionalFormatRule: {
     rule: {
-      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_MESH }],
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...MESH_ZERO_STOCK_HIGHLIGHT_COLS }],
       booleanRule: {
         condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_MESH.MESH_ID)}2<>"",$${colLetter(COL_MESH.CAJAS_EN_EXISTENCIA)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
@@ -721,11 +726,18 @@ export function buildMeshZeroStockHighlightRequest(sheetId: number): sheets_v4.S
 export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$Request[] {
   const style = { style: 'SOLID' as const, color: hexToRgb(COLORS.border) }
   const widths: [number, number][] = [
-    [COL_MESH.MARCA, 110], [COL_MESH.FORMATO, 80], [COL_MESH.SKU, 110], [COL_MESH.DESCRIPCION, 220],
+    [COL_MESH.FOTO, 64], [COL_MESH.MARCA, 110], [COL_MESH.FORMATO, 80], [COL_MESH.SKU, 110], [COL_MESH.DESCRIPCION, 220],
     [COL_MESH.PIEZAS_X_CAJA, 100], [COL_MESH.M2_X_CAJA, 90], [COL_MESH.CAJAS_EN_EXISTENCIA, 150],
     [COL_MESH.PRECIO, 100],
   ]
   return [
+    // Filas más altas para que la foto (IMAGE con alto fijo de 50px) se vea
+    // completa — el alto de fila por default de Sheets (~21px) la recortaría.
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: STYLE_LAST_ROW },
+      properties: { pixelSize: 58 },
+      fields: 'pixelSize',
+    } },
     { repeatCell: {
       range: { sheetId, startRowIndex: 0, endRowIndex: 1, ...VISIBLE_COLS_MESH },
       cell: { userEnteredFormat: {
