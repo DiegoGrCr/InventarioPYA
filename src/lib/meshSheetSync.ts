@@ -1,6 +1,7 @@
 import { sheets_v4 } from 'googleapis'
 import { createPlainSupabaseClient } from './supabase/plainClient'
 import type { BodegaConfig } from './sheetSync'
+import { isFullyEditableBodega } from './sheetSync'
 import {
   listTabs, batchGetTabValues, batchWriteCells, batchClearTabs,
   applyStructuralRequests, createMissingTabs, buildMeshProtectionRequests,
@@ -79,6 +80,14 @@ interface ParsedMeshRow {
   stockInvalid: boolean
   trackedName: string
   trackedPrice: number | null
+  sku: string
+  trackedSku: string
+  piezas: number | null
+  piezasInvalid: boolean
+  trackedPiezas: number | null
+  m2: number | null
+  m2Invalid: boolean
+  trackedM2: number | null
 }
 
 function cellRaw(v: CellValue | undefined): string {
@@ -112,6 +121,14 @@ function parseMeshTabRows(rows: CellValue[][]): ParsedMeshRow[] {
     const stockNum = cellNum(r[COL_MESH.CAJAS_EN_EXISTENCIA])
     const stockInvalid = (stockText !== '' && stockNum === null) || (stockNum !== null && stockNum < 0)
 
+    const piezasText = cellIdText(r[COL_MESH.PIEZAS_X_CAJA])
+    const piezasNum = cellNum(r[COL_MESH.PIEZAS_X_CAJA])
+    const piezasInvalid = (piezasText !== '' && piezasNum === null) || (piezasNum !== null && piezasNum < 0)
+
+    const m2Text = cellIdText(r[COL_MESH.M2_X_CAJA])
+    const m2Num = cellNum(r[COL_MESH.M2_X_CAJA])
+    const m2Invalid = (m2Text !== '' && m2Num === null) || (m2Num !== null && m2Num < 0)
+
     out.push({
       meshId,
       rowIndex1: i + 1,
@@ -122,6 +139,14 @@ function parseMeshTabRows(rows: CellValue[][]): ParsedMeshRow[] {
       stockInvalid,
       trackedName: cellRaw(r[COL_MESH.LAST_SYNCED_NAME]),
       trackedPrice: cellNum(r[COL_MESH.LAST_SYNCED_PRICE]),
+      sku: cellIdText(r[COL_MESH.SKU]),
+      trackedSku: cellIdText(r[COL_MESH.LAST_SYNCED_SKU]),
+      piezas: piezasNum,
+      piezasInvalid,
+      trackedPiezas: cellNum(r[COL_MESH.LAST_SYNCED_PIEZAS]),
+      m2: m2Num,
+      m2Invalid,
+      trackedM2: cellNum(r[COL_MESH.LAST_SYNCED_M2]),
     })
   }
   return out
@@ -133,12 +158,12 @@ interface MeshBodegaSheetState {
   rows: ParsedMeshRow[]
 }
 
-interface MeshPullMapEntry { name?: string; price?: number | null }
+interface MeshPullMapEntry { name?: string; price?: number | null; sku?: string | null; piezas?: number | null; m2?: number | null }
 
 interface MeshPullOutcome {
   pullMap: Map<string, MeshPullMapEntry>
   stockPushes: { meshId: string; bodega: string; stock: number }[]
-  conflicts: { meshId: string; field: 'name' | 'price' }[]
+  conflicts: { meshId: string; field: 'name' | 'price' | 'sku' | 'piezas' | 'm2' }[]
   sheetStates: MeshBodegaSheetState[]
 }
 
@@ -181,6 +206,21 @@ async function pullMeshPhase(
           if (existing?.price !== undefined && existing.price !== row.price) conflicts.push({ meshId: row.meshId, field: 'price' })
           pullMap.set(row.meshId, { ...existing, price: row.price })
         }
+        if (row.sku !== row.trackedSku) {
+          const existing = pullMap.get(row.meshId)
+          if (existing?.sku !== undefined && existing.sku !== (row.sku || null)) conflicts.push({ meshId: row.meshId, field: 'sku' })
+          pullMap.set(row.meshId, { ...existing, sku: row.sku || null })
+        }
+        if (!row.piezasInvalid && row.piezas !== row.trackedPiezas) {
+          const existing = pullMap.get(row.meshId)
+          if (existing?.piezas !== undefined && existing.piezas !== row.piezas) conflicts.push({ meshId: row.meshId, field: 'piezas' })
+          pullMap.set(row.meshId, { ...existing, piezas: row.piezas })
+        }
+        if (!row.m2Invalid && row.m2 !== row.trackedM2) {
+          const existing = pullMap.get(row.meshId)
+          if (existing?.m2 !== undefined && existing.m2 !== row.m2) conflicts.push({ meshId: row.meshId, field: 'm2' })
+          pullMap.set(row.meshId, { ...existing, m2: row.m2 })
+        }
       }
     }
     sheetStates.push({ config, tab, rows })
@@ -202,17 +242,30 @@ async function applyMeshPulls(
   stockPushes: MeshPullOutcome['stockPushes'],
 ) {
   const sqmByMesh = new Map<string, number | null>()
-  master.forEach(rows => rows.forEach(r => { if (!sqmByMesh.has(r.meshId)) sqmByMesh.set(r.meshId, r.m2) }))
+  const priceByMesh = new Map<string, number | null>()
+  master.forEach(rows => rows.forEach(r => {
+    if (!sqmByMesh.has(r.meshId)) sqmByMesh.set(r.meshId, r.m2)
+    if (!priceByMesh.has(r.meshId)) priceByMesh.set(r.meshId, r.precio)
+  }))
 
   await Promise.all(Array.from(pullMap.entries()).map(async ([id, changes]) => {
     const patch: Record<string, unknown> = {}
     if (changes.name !== undefined) patch.name = changes.name
-    if (changes.price !== undefined) {
-      patch.price_per_sqm = changes.price
-      const sqm = sqmByMesh.get(id)
-      patch.price_per_box = (changes.price != null && sqm) ? parseFloat((changes.price * sqm).toFixed(2)) : null
+    if (changes.sku !== undefined) patch.sku = changes.sku
+    if (changes.piezas !== undefined) patch.pieces_per_box = changes.piezas
+    if (changes.price !== undefined) patch.price_per_sqm = changes.price
+    if (changes.m2 !== undefined) patch.sqm_per_box = changes.m2
+
+    if (changes.price !== undefined || changes.m2 !== undefined) {
+      const finalPrice = changes.price !== undefined ? changes.price : (priceByMesh.get(id) ?? null)
+      const finalSqm = changes.m2 !== undefined ? changes.m2 : (sqmByMesh.get(id) ?? null)
+      patch.price_per_box = (finalPrice != null && finalSqm) ? parseFloat((finalPrice * finalSqm).toFixed(2)) : null
     }
-    if (Object.keys(patch).length > 0) await supabase.from('meshes').update(patch).eq('id', id)
+
+    if (Object.keys(patch).length > 0) {
+      const { error } = await supabase.from('meshes').update(patch).eq('id', id)
+      if (error) console.error(`[sync-mesh] no se pudo aplicar el cambio de Sheets a la malla ${id}: ${error.message}`)
+    }
   }))
 
   await Promise.all(stockPushes.map(s =>
@@ -232,7 +285,7 @@ function buildMeshTabContentValues(rows: MeshMasterRow[]): (string | number)[][]
   // buildMeshFotoValues() en una llamada separada con USER_ENTERED.
   return sortMeshRows(rows).map(it => [
     '', it.brand || 'Sin marca', it.formato || '', it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
-    it.meshId, it.name, it.precio ?? '',
+    it.meshId, it.name, it.precio ?? '', it.sku ?? '', it.piezas ?? '', it.m2 ?? '',
   ])
 }
 
@@ -285,7 +338,7 @@ async function reconcileMeshBodega(
       const { protectedRangeIds, conditionalFormatCount } = await getSheetProtectionState(sheets, config.spreadsheetId, sheetId!)
       structural.push(...buildClearProtectionsAndFormatsRequests(sheetId!, protectedRangeIds, conditionalFormatCount))
     }
-    structural.push(...buildMeshProtectionRequests(sheetId!, serviceAccountEmail))
+    structural.push(...buildMeshProtectionRequests(sheetId!, serviceAccountEmail, isFullyEditableBodega(config.bodega)))
     structural.push(buildFreezeHeaderRequest(sheetId!))
     structural.push(buildMeshZeroStockHighlightRequest(sheetId!))
     writes.push({ range: rowRangeMesh(MESH_TAB_NAME, 1, 1), values: [HEADERS_MESH] })
@@ -325,6 +378,24 @@ async function reconcileMeshBodega(
       }
       if (row.stock !== authoritative.stock) {
         writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.CAJAS_EN_EXISTENCIA, row.rowIndex1), values: [[authoritative.stock]] })
+      }
+      if (row.sku !== (authoritative.sku ?? '')) {
+        writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.SKU, row.rowIndex1), values: [[authoritative.sku ?? '']] })
+      }
+      if (row.trackedSku !== (authoritative.sku ?? '')) {
+        writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.LAST_SYNCED_SKU, row.rowIndex1), values: [[authoritative.sku ?? '']] })
+      }
+      if (row.piezas !== authoritative.piezas) {
+        writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.PIEZAS_X_CAJA, row.rowIndex1), values: [[authoritative.piezas ?? '']] })
+      }
+      if (row.trackedPiezas !== authoritative.piezas) {
+        writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.LAST_SYNCED_PIEZAS, row.rowIndex1), values: [[authoritative.piezas ?? '']] })
+      }
+      if (row.m2 !== authoritative.m2) {
+        writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.M2_X_CAJA, row.rowIndex1), values: [[authoritative.m2 ?? '']] })
+      }
+      if (row.trackedM2 !== authoritative.m2) {
+        writes.push({ range: cellRange(MESH_TAB_NAME, COL_MESH.LAST_SYNCED_M2, row.rowIndex1), values: [[authoritative.m2 ?? '']] })
       }
     }
   }

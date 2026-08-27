@@ -33,6 +33,15 @@ export function getConfiguredBodegas(): BodegaConfig[] {
     .sort((a, b) => a.bodega.localeCompare(b.bodega))
 }
 
+// Bodegas donde, además de nombre/precio/cajas, el personal también puede
+// editar SKU/piezas por caja/m² por caja/precio directamente en Sheets (con
+// su propio rastreo _last_synced_* para no perder el cambio en la siguiente
+// corrida) — el resto se queda con el criterio más restringido de siempre.
+const FULLY_EDITABLE_BODEGAS = ['La Playita']
+export function isFullyEditableBodega(bodega: string): boolean {
+  return FULLY_EDITABLE_BODEGAS.includes(bodega)
+}
+
 // -------- Datos maestros (BDD → qué DEBERÍA haber en cada hoja) --------
 
 interface MasterRow {
@@ -100,6 +109,14 @@ interface ParsedSheetRow {
   stockInvalid: boolean // true si la celda tiene texto que no es un número válido (>=0), incl. vacía/negativa
   trackedName: string
   trackedPrice: number | null
+  sku: string
+  trackedSku: string
+  piezas: number | null
+  piezasInvalid: boolean
+  trackedPiezas: number | null
+  m2: number | null
+  m2Invalid: boolean
+  trackedM2: number | null
 }
 
 // Con UNFORMATTED_VALUE, Sheets ya regresa números como number (no string), pero
@@ -142,6 +159,14 @@ function parseTabRows(rows: CellValue[][]): ParsedSheetRow[] {
     const stockNum = cellNum(r[COL.CAJAS_EN_EXISTENCIA])
     const stockInvalid = (stockText !== '' && stockNum === null) || (stockNum !== null && stockNum < 0)
 
+    const piezasText = cellIdText(r[COL.PIEZAS_X_CAJA])
+    const piezasNum = cellNum(r[COL.PIEZAS_X_CAJA])
+    const piezasInvalid = (piezasText !== '' && piezasNum === null) || (piezasNum !== null && piezasNum < 0)
+
+    const m2Text = cellIdText(r[COL.M2_X_CAJA])
+    const m2Num = cellNum(r[COL.M2_X_CAJA])
+    const m2Invalid = (m2Text !== '' && m2Num === null) || (m2Num !== null && m2Num < 0)
+
     out.push({
       productId,
       rowIndex1: i + 1,
@@ -152,6 +177,14 @@ function parseTabRows(rows: CellValue[][]): ParsedSheetRow[] {
       stockInvalid,
       trackedName: cellRaw(r[COL.LAST_SYNCED_NAME]),
       trackedPrice: cellNum(r[COL.LAST_SYNCED_PRICE]),
+      sku: cellIdText(r[COL.SKU]),
+      trackedSku: cellIdText(r[COL.LAST_SYNCED_SKU]),
+      piezas: piezasNum,
+      piezasInvalid,
+      trackedPiezas: cellNum(r[COL.LAST_SYNCED_PIEZAS]),
+      m2: m2Num,
+      m2Invalid,
+      trackedM2: cellNum(r[COL.LAST_SYNCED_M2]),
     })
   }
   return out
@@ -163,12 +196,12 @@ interface BodegaSheetState {
   rowsByTab: Map<string, ParsedSheetRow[]>
 }
 
-interface PullMapEntry { name?: string; price?: number | null }
+interface PullMapEntry { name?: string; price?: number | null; sku?: string | null; piezas?: number | null; m2?: number | null }
 
 interface PullOutcome {
   pullMap: Map<string, PullMapEntry>
   stockPushes: { productId: string; bodega: string; stock: number }[]
-  conflicts: { productId: string; field: 'name' | 'price' }[]
+  conflicts: { productId: string; field: 'name' | 'price' | 'sku' | 'piezas' | 'm2' }[]
   sheetStates: BodegaSheetState[]
 }
 
@@ -223,6 +256,26 @@ async function pullPhase(
             if (existing?.price !== undefined && existing.price !== row.price) conflicts.push({ productId: row.productId, field: 'price' })
             pullMap.set(row.productId, { ...existing, price: row.price })
           }
+          // SKU/piezas/m² solo se pueden editar de verdad en las bodegas
+          // "totalmente editables" (protegidos con celda bloqueada en el
+          // resto) — pero comparar contra su columna de rastreo aquí es
+          // seguro para TODAS las bodegas: donde está protegida, el valor y
+          // su rastreo siempre coinciden, así que nunca se detecta un cambio.
+          if (row.sku !== row.trackedSku) {
+            const existing = pullMap.get(row.productId)
+            if (existing?.sku !== undefined && existing.sku !== (row.sku || null)) conflicts.push({ productId: row.productId, field: 'sku' })
+            pullMap.set(row.productId, { ...existing, sku: row.sku || null })
+          }
+          if (!row.piezasInvalid && row.piezas !== row.trackedPiezas) {
+            const existing = pullMap.get(row.productId)
+            if (existing?.piezas !== undefined && existing.piezas !== row.piezas) conflicts.push({ productId: row.productId, field: 'piezas' })
+            pullMap.set(row.productId, { ...existing, piezas: row.piezas })
+          }
+          if (!row.m2Invalid && row.m2 !== row.trackedM2) {
+            const existing = pullMap.get(row.productId)
+            if (existing?.m2 !== undefined && existing.m2 !== row.m2) conflicts.push({ productId: row.productId, field: 'm2' })
+            pullMap.set(row.productId, { ...existing, m2: row.m2 })
+          }
         }
       }
     }
@@ -245,17 +298,36 @@ async function applyPulls(
   stockPushes: PullOutcome['stockPushes'],
 ) {
   const sqmByProduct = new Map<string, number | null>()
-  master.forEach(rows => rows.forEach(r => { if (!sqmByProduct.has(r.productId)) sqmByProduct.set(r.productId, r.m2) }))
+  const priceByProduct = new Map<string, number | null>()
+  master.forEach(rows => rows.forEach(r => {
+    if (!sqmByProduct.has(r.productId)) sqmByProduct.set(r.productId, r.m2)
+    if (!priceByProduct.has(r.productId)) priceByProduct.set(r.productId, r.precio)
+  }))
 
   await Promise.all(Array.from(pullMap.entries()).map(async ([id, changes]) => {
     const patch: Record<string, unknown> = {}
     if (changes.name !== undefined) patch.name = changes.name
-    if (changes.price !== undefined) {
-      patch.price_per_sqm = changes.price
-      const sqm = sqmByProduct.get(id)
-      patch.price_per_box = (changes.price != null && sqm) ? parseFloat((changes.price * sqm).toFixed(2)) : null
+    if (changes.sku !== undefined) patch.sku = changes.sku
+    if (changes.piezas !== undefined) patch.pieces_per_box = changes.piezas
+    if (changes.price !== undefined) patch.price_per_sqm = changes.price
+    if (changes.m2 !== undefined) patch.sqm_per_box = changes.m2
+
+    // price_per_box depende de precio Y m², así que si cualquiera de los dos
+    // cambió en esta misma corrida hay que recalcularlo con el valor FINAL de
+    // ambos (no el que ya estaba en la BDD antes de este pull).
+    if (changes.price !== undefined || changes.m2 !== undefined) {
+      const finalPrice = changes.price !== undefined ? changes.price : (priceByProduct.get(id) ?? null)
+      const finalSqm = changes.m2 !== undefined ? changes.m2 : (sqmByProduct.get(id) ?? null)
+      patch.price_per_box = (finalPrice != null && finalSqm) ? parseFloat((finalPrice * finalSqm).toFixed(2)) : null
     }
-    if (Object.keys(patch).length > 0) await supabase.from('products').update(patch).eq('id', id)
+
+    if (Object.keys(patch).length > 0) {
+      // SKU tiene restricción UNIQUE — si el personal escribe uno repetido,
+      // que falle solo esa actualización (se queda como estaba, la Fase B lo
+      // corrige de vuelta) en vez de tumbar el resto de la sincronización.
+      const { error } = await supabase.from('products').update(patch).eq('id', id)
+      if (error) console.error(`[sync] no se pudo aplicar el cambio de Sheets al producto ${id}: ${error.message}`)
+    }
   }))
 
   await Promise.all(stockPushes.map(s =>
@@ -271,7 +343,7 @@ async function applyPulls(
 function buildTabContentValues(rows: MasterRow[]): (string | number)[][] {
   return sortByFormatoThenName(rows).map(it => [
     it.formato, it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
-    it.productId, it.name, it.precio ?? '',
+    it.productId, it.name, it.precio ?? '', it.sku ?? '', it.piezas ?? '', it.m2 ?? '',
   ])
 }
 
@@ -355,7 +427,7 @@ async function reconcileBodega(
         const { protectedRangeIds, conditionalFormatCount } = await getSheetProtectionState(sheets, config.spreadsheetId, sheetId)
         structural.push(...buildClearProtectionsAndFormatsRequests(sheetId, protectedRangeIds, conditionalFormatCount))
       }
-      structural.push(...buildProtectionRequests(sheetId, serviceAccountEmail))
+      structural.push(...buildProtectionRequests(sheetId, serviceAccountEmail, isFullyEditableBodega(config.bodega)))
       structural.push(buildFreezeHeaderRequest(sheetId))
       structural.push(buildZeroStockHighlightRequest(sheetId))
       writes.push({ range: rowRange(title, 1, 1), values: [HEADERS] })
@@ -401,6 +473,24 @@ async function reconcileBodega(
         if (row.stock !== authoritative.stock) {
           writes.push({ range: cellRange(title, COL.CAJAS_EN_EXISTENCIA, row.rowIndex1), values: [[authoritative.stock]] })
         }
+        if (row.sku !== (authoritative.sku ?? '')) {
+          writes.push({ range: cellRange(title, COL.SKU, row.rowIndex1), values: [[authoritative.sku ?? '']] })
+        }
+        if (row.trackedSku !== (authoritative.sku ?? '')) {
+          writes.push({ range: cellRange(title, COL.LAST_SYNCED_SKU, row.rowIndex1), values: [[authoritative.sku ?? '']] })
+        }
+        if (row.piezas !== authoritative.piezas) {
+          writes.push({ range: cellRange(title, COL.PIEZAS_X_CAJA, row.rowIndex1), values: [[authoritative.piezas ?? '']] })
+        }
+        if (row.trackedPiezas !== authoritative.piezas) {
+          writes.push({ range: cellRange(title, COL.LAST_SYNCED_PIEZAS, row.rowIndex1), values: [[authoritative.piezas ?? '']] })
+        }
+        if (row.m2 !== authoritative.m2) {
+          writes.push({ range: cellRange(title, COL.M2_X_CAJA, row.rowIndex1), values: [[authoritative.m2 ?? '']] })
+        }
+        if (row.trackedM2 !== authoritative.m2) {
+          writes.push({ range: cellRange(title, COL.LAST_SYNCED_M2, row.rowIndex1), values: [[authoritative.m2 ?? '']] })
+        }
       }
     }
   }
@@ -445,7 +535,7 @@ export interface SyncSummary {
   meshBodegas: MeshBodegaResult[]
   cenefaBodegas: CenefaBodegaResult[]
   accessoryBodegas: AccessoryBodegaResult[]
-  conflicts: { productId: string; field: 'name' | 'price' }[]
+  conflicts: { productId: string; field: 'name' | 'price' | 'sku' | 'piezas' | 'm2' }[]
   skipped?: boolean
 }
 

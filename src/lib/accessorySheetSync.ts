@@ -1,6 +1,7 @@
 import { sheets_v4 } from 'googleapis'
 import { createPlainSupabaseClient } from './supabase/plainClient'
 import type { BodegaConfig } from './sheetSync'
+import { isFullyEditableBodega } from './sheetSync'
 import {
   listTabs, batchGetTabValues, batchWriteCells, batchClearTabs,
   applyStructuralRequests, createMissingTabs, buildAccessoryProtectionRequests,
@@ -85,6 +86,8 @@ interface ParsedAccessoryRow {
   trackedName: string
   trackedPrice: number | null
   trackedCategory: string
+  sku: string
+  trackedSku: string
 }
 
 function cellRaw(v: CellValue | undefined): string {
@@ -129,6 +132,8 @@ function parseAccessoryTabRows(rows: CellValue[][]): ParsedAccessoryRow[] {
       trackedName: cellRaw(r[COL_ACC.LAST_SYNCED_NAME]),
       trackedPrice: cellNum(r[COL_ACC.LAST_SYNCED_PRICE]),
       trackedCategory: cellRaw(r[COL_ACC.LAST_SYNCED_CATEGORY]),
+      sku: cellIdText(r[COL_ACC.SKU]),
+      trackedSku: cellIdText(r[COL_ACC.LAST_SYNCED_SKU]),
     })
   }
   return out
@@ -140,12 +145,12 @@ interface AccessoryBodegaSheetState {
   rows: ParsedAccessoryRow[]
 }
 
-interface AccessoryPullMapEntry { name?: string; price?: number | null }
+interface AccessoryPullMapEntry { name?: string; price?: number | null; sku?: string | null }
 
 interface AccessoryPullOutcome {
   pullMap: Map<string, AccessoryPullMapEntry>
   stockPushes: { accessoryId: string; bodega: string; stock: number }[]
-  conflicts: { accessoryId: string; field: 'name' | 'price' }[]
+  conflicts: { accessoryId: string; field: 'name' | 'price' | 'sku' }[]
   sheetStates: AccessoryBodegaSheetState[]
 }
 
@@ -188,6 +193,11 @@ async function pullAccessoryPhase(
           if (existing?.price !== undefined && existing.price !== row.price) conflicts.push({ accessoryId: row.accessoryId, field: 'price' })
           pullMap.set(row.accessoryId, { ...existing, price: row.price })
         }
+        if (row.sku !== row.trackedSku) {
+          const existing = pullMap.get(row.accessoryId)
+          if (existing?.sku !== undefined && existing.sku !== (row.sku || null)) conflicts.push({ accessoryId: row.accessoryId, field: 'sku' })
+          pullMap.set(row.accessoryId, { ...existing, sku: row.sku || null })
+        }
       }
     }
     sheetStates.push({ config, tab, rows })
@@ -211,7 +221,11 @@ async function applyAccessoryPulls(
     const patch: Record<string, unknown> = {}
     if (changes.name !== undefined) patch.name = changes.name
     if (changes.price !== undefined) patch.price = changes.price
-    if (Object.keys(patch).length > 0) await supabase.from('accessories').update(patch).eq('id', id)
+    if (changes.sku !== undefined) patch.sku = changes.sku
+    if (Object.keys(patch).length > 0) {
+      const { error } = await supabase.from('accessories').update(patch).eq('id', id)
+      if (error) console.error(`[sync-acc] no se pudo aplicar el cambio de Sheets al adhesivo ${id}: ${error.message}`)
+    }
   }))
 
   await Promise.all(stockPushes.map(s =>
@@ -229,7 +243,7 @@ function buildAccessoryTabContentValues(rows: AccessoryMasterRow[]): (string | n
     const categoryLabel = it.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla'
     return [
       categoryLabel, it.brand || 'Sin marca', it.sku ?? '', it.name, it.stock, it.precio ?? '',
-      it.accessoryId, it.name, it.precio ?? '', categoryLabel,
+      it.accessoryId, it.name, it.precio ?? '', categoryLabel, it.sku ?? '',
     ]
   })
 }
@@ -300,7 +314,7 @@ async function reconcileAccessoryBodega(
       const { protectedRangeIds, conditionalFormatCount } = await getSheetProtectionState(sheets, config.spreadsheetId, sheetId!)
       structural.push(...buildClearProtectionsAndFormatsRequests(sheetId!, protectedRangeIds, conditionalFormatCount))
     }
-    structural.push(...buildAccessoryProtectionRequests(sheetId!, serviceAccountEmail))
+    structural.push(...buildAccessoryProtectionRequests(sheetId!, serviceAccountEmail, isFullyEditableBodega(config.bodega)))
     structural.push(buildFreezeHeaderRequest(sheetId!))
     structural.push(buildAccessoryZeroStockHighlightRequest(sheetId!))
     writes.push({ range: rowRangeAcc(ACCESSORY_TAB_NAME, 1, 1), values: [HEADERS_ACC] })
@@ -334,6 +348,12 @@ async function reconcileAccessoryBodega(
       }
       if (row.stock !== authoritative.stock) {
         writes.push({ range: cellRange(ACCESSORY_TAB_NAME, COL_ACC.CANTIDAD, row.rowIndex1), values: [[authoritative.stock]] })
+      }
+      if (row.sku !== (authoritative.sku ?? '')) {
+        writes.push({ range: cellRange(ACCESSORY_TAB_NAME, COL_ACC.SKU, row.rowIndex1), values: [[authoritative.sku ?? '']] })
+      }
+      if (row.trackedSku !== (authoritative.sku ?? '')) {
+        writes.push({ range: cellRange(ACCESSORY_TAB_NAME, COL_ACC.LAST_SYNCED_SKU, row.rowIndex1), values: [[authoritative.sku ?? '']] })
       }
     }
   }

@@ -15,11 +15,14 @@ export const COL = {
   PRODUCT_ID: 7,
   LAST_SYNCED_NAME: 8,
   LAST_SYNCED_PRICE: 9,
+  LAST_SYNCED_SKU: 10,
+  LAST_SYNCED_PIEZAS: 11,
+  LAST_SYNCED_M2: 12,
 } as const
 
 export const HEADERS = [
   'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
-  '_product_id', '_last_synced_name', '_last_synced_price',
+  '_product_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku', '_last_synced_piezas', '_last_synced_m2',
 ]
 
 const DATA_LAST_ROW = 5000
@@ -73,7 +76,7 @@ export function cellRange(title: string, col0: number, row1: number): string {
 }
 
 export function rowRange(title: string, startRow1: number, endRow1: number): string {
-  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL.LAST_SYNCED_PRICE)}${endRow1}`
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL.LAST_SYNCED_M2)}${endRow1}`
 }
 
 // Rango de una sola columna a lo largo de varias filas (ej. escribir solo la
@@ -186,26 +189,47 @@ export async function createMissingTabs(sheets: sheets_v4.Sheets, spreadsheetId:
 // y las columnas ocultas de sync — solo la cuenta de servicio (y el dueño del
 // archivo, siempre implícito) puede editarlas. Solo DESCRIPCIÓN/CAJAS EN
 // EXISTENCIA quedan libres para el personal.
-export function buildProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
+//
+// fullyEditable (solo La Playita por ahora, ver FULLY_EDITABLE_BODEGAS en
+// sheetSync.ts): además de eso, también deja libres SKU/PIEZAS X CAJA/
+// M² X CAJA/PRECIO — esos 4 SÍ tienen su propia columna de rastreo
+// (_last_synced_*) para leer de vuelta un cambio del personal sin que la
+// siguiente corrida lo borre, igual que ya pasaba con nombre/precio. FORMATO
+// se queda protegido siempre: no es texto libre, es una referencia a la
+// tabla de medidas, y el sync no sabe qué hacer si alguien escribe una
+// medida que no existe todavía.
+export function buildProtectionRequests(sheetId: number, serviceAccountEmail: string, fullyEditable = false): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
-  return [
+  const requests: sheets_v4.Schema$Request[] = []
+
+  if (fullyEditable) {
+    requests.push({ addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL.FORMATO, endColumnIndex: COL.FORMATO + 1 },
+      description: 'FORMATO - solo lectura', warningOnly: false, editors,
+    } } })
+  } else {
+    requests.push(
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL.FORMATO, endColumnIndex: COL.SKU + 1 },
+        description: 'FORMATO/SKU - solo lectura', warningOnly: false, editors,
+      } } },
+      { addProtectedRange: { protectedRange: {
+        // D:E — PIEZAS X CAJA / M² X CAJA. OJO: no se puede fusionar con el
+        // rango de PRECIO (G) porque entre medio está CAJAS EN EXISTENCIA (F),
+        // que debe quedar editable — necesitan ser 2 rangos separados.
+        range: { sheetId, startColumnIndex: COL.PIEZAS_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
+        description: 'PIEZAS/M2 - solo lectura', warningOnly: false, editors,
+      } } },
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL.PRECIO, endColumnIndex: COL.PRECIO + 1 },
+        description: 'PRECIO - solo lectura', warningOnly: false, editors,
+      } } },
+    )
+  }
+
+  requests.push(
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL.FORMATO, endColumnIndex: COL.SKU + 1 },
-      description: 'FORMATO/SKU - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      // D:E — PIEZAS X CAJA / M² X CAJA. OJO: no se puede fusionar con el
-      // rango de PRECIO (G) porque entre medio está CAJAS EN EXISTENCIA (F),
-      // que debe quedar editable — necesitan ser 2 rangos separados.
-      range: { sheetId, startColumnIndex: COL.PIEZAS_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
-      description: 'PIEZAS/M2 - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL.PRECIO, endColumnIndex: COL.PRECIO + 1 },
-      description: 'PRECIO - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL.PRODUCT_ID, endColumnIndex: COL.LAST_SYNCED_PRICE + 1 },
+      range: { sheetId, startColumnIndex: COL.PRODUCT_ID, endColumnIndex: COL.LAST_SYNCED_M2 + 1 },
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
@@ -215,20 +239,33 @@ export function buildProtectionRequests(sheetId: number, serviceAccountEmail: st
       range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL.FORMATO, endColumnIndex: COL.PRECIO + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
-    // Protección de la PESTAÑA completa (range sin límites = toda la hoja) —
-    // a diferencia de las protecciones de arriba (que solo bloquean editar
-    // celdas puntuales), esta también evita que alguien sin permiso borre,
-    // renombre o mueva la pestaña. unprotectedRanges dentro de esta misma
-    // protección deja libres exactamente las mismas celdas de siempre.
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId },
-      unprotectedRanges: [
+  )
+
+  // Protección de la PESTAÑA completa (range sin límites = toda la hoja) —
+  // a diferencia de las protecciones de arriba (que solo bloquean editar
+  // celdas puntuales), esta también evita que alguien sin permiso borre,
+  // renombre o mueva la pestaña. unprotectedRanges dentro de esta misma
+  // protección deja libres exactamente las mismas celdas de siempre.
+  const unprotectedRanges = fullyEditable
+    ? [
+        { sheetId, startRowIndex: 1, startColumnIndex: COL.SKU, endColumnIndex: COL.SKU + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL.DESCRIPCION, endColumnIndex: COL.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL.PIEZAS_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL.PRECIO, endColumnIndex: COL.PRECIO + 1 },
+      ]
+    : [
         { sheetId, startRowIndex: 1, startColumnIndex: COL.DESCRIPCION, endColumnIndex: COL.DESCRIPCION + 1 },
         { sheetId, startRowIndex: 1, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
-      ],
-      description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
-    } } },
-  ]
+      ]
+
+  requests.push({ addProtectedRange: { protectedRange: {
+    range: { sheetId },
+    unprotectedRanges,
+    description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
+  } } })
+
+  return requests
 }
 
 // Devuelve 2 requests: ocultar las columnas internas Y des-ocultar
@@ -245,7 +282,7 @@ export function buildHideColumnsRequest(sheetId: number): sheets_v4.Schema$Reque
       fields: 'hiddenByUser',
     } },
     { updateDimensionProperties: {
-      range: { sheetId, dimension: 'COLUMNS', startIndex: COL.PRODUCT_ID, endIndex: COL.LAST_SYNCED_PRICE + 1 },
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL.PRODUCT_ID, endIndex: COL.LAST_SYNCED_M2 + 1 },
       properties: { hiddenByUser: true },
       fields: 'hiddenByUser',
     } },
@@ -457,11 +494,12 @@ export const COL_ACC = {
   // staff) — dispara una reconstrucción completa para que la fila se mueva
   // al bloque fusionado correcto.
   LAST_SYNCED_CATEGORY: 9,
+  LAST_SYNCED_SKU: 10,
 } as const
 
 export const HEADERS_ACC = [
   'CATEGORÍA', 'MARCA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO',
-  '_accessory_id', '_last_synced_name', '_last_synced_price', '_last_synced_category',
+  '_accessory_id', '_last_synced_name', '_last_synced_price', '_last_synced_category', '_last_synced_sku',
 ]
 
 export const ACCESSORY_TAB_NAME = 'Adhesivos'
@@ -469,43 +507,69 @@ export const ACCESSORY_TAB_NAME = 'Adhesivos'
 // Gemelo de rowRange() para el layout de Adhesivos — rowRange() hardcodea la
 // columna final en COL.LAST_SYNCED_PRICE (propia de Pisos, columna I).
 export function rowRangeAcc(title: string, startRow1: number, endRow1: number): string {
-  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_ACC.LAST_SYNCED_CATEGORY)}${endRow1}`
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_ACC.LAST_SYNCED_SKU)}${endRow1}`
 }
 
 const VISIBLE_COLS_ACC = { startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.PRECIO + 1 }
 
 // Protege CATEGORÍA/SKU/DESCRIPCIÓN y PRECIO — solo CANTIDAD queda libre
-// para el personal.
-export function buildAccessoryProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
+// para el personal. fullyEditable (La Playita, ver isFullyEditableBodega en
+// sheetSync.ts): también deja libres SKU/DESCRIPCIÓN/PRECIO (ya tienen su
+// propio rastreo _last_synced_*). CATEGORÍA y MARCA se quedan protegidas
+// siempre — CATEGORÍA está fusionada en bloques y cambiarla requiere mover
+// la fila de bloque, y MARCA no tiene rastreo propio todavía.
+export function buildAccessoryProtectionRequests(sheetId: number, serviceAccountEmail: string, fullyEditable = false): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
-  return [
+  const requests: sheets_v4.Schema$Request[] = []
+
+  if (fullyEditable) {
+    requests.push({ addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.MARCA + 1 },
+      description: 'CATEGORÍA/MARCA - solo lectura', warningOnly: false, editors,
+    } } })
+  } else {
+    requests.push(
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.DESCRIPCION + 1 },
+        description: 'CATEGORÍA/MARCA/SKU/DESCRIPCIÓN - solo lectura', warningOnly: false, editors,
+      } } },
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL_ACC.PRECIO, endColumnIndex: COL_ACC.PRECIO + 1 },
+        description: 'PRECIO - solo lectura', warningOnly: false, editors,
+      } } },
+    )
+  }
+
+  requests.push(
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.DESCRIPCION + 1 },
-      description: 'CATEGORÍA/MARCA/SKU/DESCRIPCIÓN - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_ACC.PRECIO, endColumnIndex: COL_ACC.PRECIO + 1 },
-      description: 'PRECIO - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_ACC.ACCESSORY_ID, endColumnIndex: COL_ACC.LAST_SYNCED_CATEGORY + 1 },
+      range: { sheetId, startColumnIndex: COL_ACC.ACCESSORY_ID, endColumnIndex: COL_ACC.LAST_SYNCED_SKU + 1 },
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.PRECIO + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
-    // Protección de la PESTAÑA completa — ver el equivalente de Pisos
-    // (buildProtectionRequests). Aquí solo CANTIDAD queda libre, ni siquiera
-    // DESCRIPCIÓN (decisión explícita: en Adhesivos solo se reporta cantidad).
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId },
-      unprotectedRanges: [
+  )
+
+  const unprotectedRanges = fullyEditable
+    ? [
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 },
+      ]
+    : [
         { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.CANTIDAD, endColumnIndex: COL_ACC.CANTIDAD + 1 },
-      ],
-      description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
-    } } },
-  ]
+      ]
+
+  // Protección de la PESTAÑA completa — ver el equivalente de Pisos
+  // (buildProtectionRequests). Fuera de fullyEditable, solo CANTIDAD queda
+  // libre, ni siquiera DESCRIPCIÓN (decisión explícita: en Adhesivos solo se
+  // reporta cantidad).
+  requests.push({ addProtectedRange: { protectedRange: {
+    range: { sheetId },
+    unprotectedRanges,
+    description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
+  } } })
+
+  return requests
 }
 
 // Quita/rehace la combinación de celdas de CATEGORÍA — mismo patrón que
@@ -529,7 +593,7 @@ export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Sch
       fields: 'hiddenByUser',
     } },
     { updateDimensionProperties: {
-      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.ACCESSORY_ID, endIndex: COL_ACC.LAST_SYNCED_CATEGORY + 1 },
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.ACCESSORY_ID, endIndex: COL_ACC.LAST_SYNCED_SKU + 1 },
       properties: { hiddenByUser: true },
       fields: 'hiddenByUser',
     } },
@@ -646,11 +710,14 @@ export const COL_MESH = {
   MESH_ID: 9,
   LAST_SYNCED_NAME: 10,
   LAST_SYNCED_PRICE: 11,
+  LAST_SYNCED_SKU: 12,
+  LAST_SYNCED_PIEZAS: 13,
+  LAST_SYNCED_M2: 14,
 } as const
 
 export const HEADERS_MESH = [
   'FOTO', 'MARCA', 'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
-  '_mesh_id', '_last_synced_name', '_last_synced_price',
+  '_mesh_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku', '_last_synced_piezas', '_last_synced_m2',
 ]
 
 export const MESH_TAB_NAME = 'Mallas'
@@ -658,7 +725,7 @@ export const MESH_TAB_NAME = 'Mallas'
 // Gemelo de rowRange() para el layout de Mallas — rowRange() hardcodea la
 // columna final en COL.LAST_SYNCED_PRICE (propia de Pisos, columna I).
 export function rowRangeMesh(title: string, startRow1: number, endRow1: number): string {
-  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_MESH.LAST_SYNCED_PRICE)}${endRow1}`
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_MESH.LAST_SYNCED_M2)}${endRow1}`
 }
 
 const VISIBLE_COLS_MESH = { startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.PRECIO + 1 }
@@ -669,42 +736,71 @@ const MESH_ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL_MESH.MARCA, endCo
 
 // Protege FOTO+MARCA+FORMATO+SKU, PIEZAS/M2, PRECIO, la fila de encabezados y
 // las columnas ocultas — solo DESCRIPCIÓN/CAJAS EN EXISTENCIA quedan libres
-// para el personal (mismo criterio que Pisos).
-export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
+// para el personal (mismo criterio que Pisos). fullyEditable (La Playita, ver
+// isFullyEditableBodega en sheetSync.ts): también deja libres SKU/PIEZAS X
+// CAJA/M² X CAJA/PRECIO. FOTO y MARCA/FORMATO se quedan protegidos siempre —
+// FOTO es una fórmula que genera el sync, y MARCA/FORMATO son referencias a
+// catálogos aparte, no texto libre.
+export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail: string, fullyEditable = false): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
-  return [
+  const requests: sheets_v4.Schema$Request[] = []
+
+  if (fullyEditable) {
+    requests.push({ addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.FORMATO + 1 },
+      description: 'FOTO/MARCA/FORMATO - solo lectura', warningOnly: false, editors,
+    } } })
+  } else {
+    requests.push(
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.SKU + 1 },
+        description: 'FOTO/MARCA/FORMATO/SKU - solo lectura', warningOnly: false, editors,
+      } } },
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL_MESH.PIEZAS_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
+        description: 'PIEZAS/M2 - solo lectura', warningOnly: false, editors,
+      } } },
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL_MESH.PRECIO, endColumnIndex: COL_MESH.PRECIO + 1 },
+        description: 'PRECIO - solo lectura', warningOnly: false, editors,
+      } } },
+    )
+  }
+
+  requests.push(
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.SKU + 1 },
-      description: 'FOTO/MARCA/FORMATO/SKU - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_MESH.PIEZAS_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
-      description: 'PIEZAS/M2 - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_MESH.PRECIO, endColumnIndex: COL_MESH.PRECIO + 1 },
-      description: 'PRECIO - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_MESH.MESH_ID, endColumnIndex: COL_MESH.LAST_SYNCED_PRICE + 1 },
+      range: { sheetId, startColumnIndex: COL_MESH.MESH_ID, endColumnIndex: COL_MESH.LAST_SYNCED_M2 + 1 },
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.PRECIO + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
-    // Protección de la PESTAÑA completa — ver el equivalente de Pisos
-    // (buildProtectionRequests) para la explicación de por qué es distinta
-    // de proteger solo celdas puntuales.
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId },
-      unprotectedRanges: [
+  )
+
+  const unprotectedRanges = fullyEditable
+    ? [
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.SKU, endColumnIndex: COL_MESH.SKU + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.DESCRIPCION, endColumnIndex: COL_MESH.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.PIEZAS_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.PRECIO, endColumnIndex: COL_MESH.PRECIO + 1 },
+      ]
+    : [
         { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.DESCRIPCION, endColumnIndex: COL_MESH.DESCRIPCION + 1 },
         { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA + 1 },
-      ],
-      description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
-    } } },
-  ]
+      ]
+
+  // Protección de la PESTAÑA completa — ver el equivalente de Pisos
+  // (buildProtectionRequests) para la explicación de por qué es distinta
+  // de proteger solo celdas puntuales.
+  requests.push({ addProtectedRange: { protectedRange: {
+    range: { sheetId },
+    unprotectedRanges,
+    description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
+  } } })
+
+  return requests
 }
 
 export function buildMeshHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request[] {
@@ -715,7 +811,7 @@ export function buildMeshHideColumnsRequest(sheetId: number): sheets_v4.Schema$R
       fields: 'hiddenByUser',
     } },
     { updateDimensionProperties: {
-      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_MESH.MESH_ID, endIndex: COL_MESH.LAST_SYNCED_PRICE + 1 },
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_MESH.MESH_ID, endIndex: COL_MESH.LAST_SYNCED_M2 + 1 },
       properties: { hiddenByUser: true },
       fields: 'hiddenByUser',
     } },
@@ -818,59 +914,90 @@ export const COL_CENEFA = {
   CENEFA_ID: 8,
   LAST_SYNCED_NAME: 9,
   LAST_SYNCED_PRICE: 10,
+  LAST_SYNCED_SKU: 11,
+  LAST_SYNCED_PIEZAS: 12,
+  LAST_SYNCED_M2: 13,
 } as const
 
 export const HEADERS_CENEFA = [
   'MARCA', 'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
-  '_cenefa_id', '_last_synced_name', '_last_synced_price',
+  '_cenefa_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku', '_last_synced_piezas', '_last_synced_m2',
 ]
 
 export const CENEFA_TAB_NAME = 'Cenefas'
 
 export function rowRangeCenefa(title: string, startRow1: number, endRow1: number): string {
-  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_CENEFA.LAST_SYNCED_PRICE)}${endRow1}`
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_CENEFA.LAST_SYNCED_M2)}${endRow1}`
 }
 
 const VISIBLE_COLS_CENEFA = { startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.PRECIO + 1 }
 
 // Protege MARCA+FORMATO+SKU, PIEZAS/M2, PRECIO, la fila de encabezados y las
 // columnas ocultas — solo DESCRIPCIÓN/CAJAS EN EXISTENCIA quedan libres para
-// el personal (mismo criterio que Pisos/Mallas).
-export function buildCenefaProtectionRequests(sheetId: number, serviceAccountEmail: string): sheets_v4.Schema$Request[] {
+// el personal (mismo criterio que Pisos/Mallas). fullyEditable (La Playita,
+// ver isFullyEditableBodega en sheetSync.ts): también deja libres SKU/PIEZAS
+// X CAJA/M² X CAJA/PRECIO. MARCA/FORMATO se quedan protegidos siempre —
+// son referencias a catálogos aparte, no texto libre.
+export function buildCenefaProtectionRequests(sheetId: number, serviceAccountEmail: string, fullyEditable = false): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
-  return [
+  const requests: sheets_v4.Schema$Request[] = []
+
+  if (fullyEditable) {
+    requests.push({ addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.FORMATO + 1 },
+      description: 'MARCA/FORMATO - solo lectura', warningOnly: false, editors,
+    } } })
+  } else {
+    requests.push(
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.SKU + 1 },
+        description: 'MARCA/FORMATO/SKU - solo lectura', warningOnly: false, editors,
+      } } },
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL_CENEFA.PIEZAS_X_CAJA, endColumnIndex: COL_CENEFA.M2_X_CAJA + 1 },
+        description: 'PIEZAS/M2 - solo lectura', warningOnly: false, editors,
+      } } },
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL_CENEFA.PRECIO, endColumnIndex: COL_CENEFA.PRECIO + 1 },
+        description: 'PRECIO - solo lectura', warningOnly: false, editors,
+      } } },
+    )
+  }
+
+  requests.push(
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.SKU + 1 },
-      description: 'MARCA/FORMATO/SKU - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_CENEFA.PIEZAS_X_CAJA, endColumnIndex: COL_CENEFA.M2_X_CAJA + 1 },
-      description: 'PIEZAS/M2 - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_CENEFA.PRECIO, endColumnIndex: COL_CENEFA.PRECIO + 1 },
-      description: 'PRECIO - solo lectura', warningOnly: false, editors,
-    } } },
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_CENEFA.CENEFA_ID, endColumnIndex: COL_CENEFA.LAST_SYNCED_PRICE + 1 },
+      range: { sheetId, startColumnIndex: COL_CENEFA.CENEFA_ID, endColumnIndex: COL_CENEFA.LAST_SYNCED_M2 + 1 },
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
       range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.PRECIO + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
-    // Protección de la PESTAÑA completa — ver el equivalente de Pisos
-    // (buildProtectionRequests) para la explicación de por qué es distinta
-    // de proteger solo celdas puntuales.
-    { addProtectedRange: { protectedRange: {
-      range: { sheetId },
-      unprotectedRanges: [
+  )
+
+  const unprotectedRanges = fullyEditable
+    ? [
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.SKU, endColumnIndex: COL_CENEFA.SKU + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.DESCRIPCION, endColumnIndex: COL_CENEFA.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.PIEZAS_X_CAJA, endColumnIndex: COL_CENEFA.M2_X_CAJA + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.PRECIO, endColumnIndex: COL_CENEFA.PRECIO + 1 },
+      ]
+    : [
         { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.DESCRIPCION, endColumnIndex: COL_CENEFA.DESCRIPCION + 1 },
         { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA + 1 },
-      ],
-      description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
-    } } },
-  ]
+      ]
+
+  // Protección de la PESTAÑA completa — ver el equivalente de Pisos
+  // (buildProtectionRequests) para la explicación de por qué es distinta
+  // de proteger solo celdas puntuales.
+  requests.push({ addProtectedRange: { protectedRange: {
+    range: { sheetId },
+    unprotectedRanges,
+    description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
+  } } })
+
+  return requests
 }
 
 export function buildCenefaHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request[] {
@@ -881,7 +1008,7 @@ export function buildCenefaHideColumnsRequest(sheetId: number): sheets_v4.Schema
       fields: 'hiddenByUser',
     } },
     { updateDimensionProperties: {
-      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_CENEFA.CENEFA_ID, endIndex: COL_CENEFA.LAST_SYNCED_PRICE + 1 },
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_CENEFA.CENEFA_ID, endIndex: COL_CENEFA.LAST_SYNCED_M2 + 1 },
       properties: { hiddenByUser: true },
       fields: 'hiddenByUser',
     } },
