@@ -55,6 +55,26 @@ interface MasterRow {
   m2: number | null
   precio: number | null
   stock: number
+  saleUnit: 'caja' | 'pieza'
+}
+
+// Los pisos que se venden por pieza guardan su stock en PIEZAS (así se maneja
+// en toda la app), pero mostrarlo así en Sheets confundía al personal al
+// hacer inventario físico ("¿son piezas o cajas?"). Se muestra en cajas
+// (piezas ÷ piezas que trae la caja del proveedor) y, si editan esa celda,
+// se multiplica de vuelta para guardar el total real de piezas.
+function stockToDisplay(row: Pick<MasterRow, 'stock' | 'saleUnit' | 'piezas'>): number {
+  if (row.saleUnit === 'pieza' && row.piezas && row.piezas > 0) {
+    return parseFloat((row.stock / row.piezas).toFixed(2))
+  }
+  return row.stock
+}
+
+function stockFromDisplay(displayValue: number, saleUnit: 'caja' | 'pieza', piezas: number | null): number {
+  if (saleUnit === 'pieza' && piezas && piezas > 0) {
+    return Math.round(displayValue * piezas)
+  }
+  return displayValue
 }
 
 async function fetchMasterData(supabase: ReturnType<typeof createPlainSupabaseClient>, bodegas: string[]): Promise<Map<string, MasterRow[]>> {
@@ -88,10 +108,11 @@ async function fetchMasterData(supabase: ReturnType<typeof createPlainSupabaseCl
       formato: p.size?.label || 'Sin medida',
       sku: p.sku,
       area: p.size ? p.size.width * p.size.height : 0,
-      piezas: p.sale_unit === 'pieza' ? null : p.pieces_per_box,
+      piezas: p.pieces_per_box,
       m2: p.sqm_per_box,
       precio: p.price_per_sqm,
       stock: row.stock,
+      saleUnit: p.sale_unit,
     })
   })
   return result
@@ -223,7 +244,9 @@ async function pullPhase(
     // personal no la borró, esa fila es huérfana: se ignora por completo aquí
     // (ni stock ni nombre/precio) — si no, el upsert de stock la resucitaría
     // en cada corrida y la Fase B nunca podría eliminarla del todo.
-    const validIds = new Set((masterBefore.get(config.bodega) || []).map(r => r.productId))
+    const masterRowsForBodega = masterBefore.get(config.bodega) || []
+    const validIds = new Set(masterRowsForBodega.map(r => r.productId))
+    const masterById = new Map(masterRowsForBodega.map(r => [r.productId, r]))
 
     // Rastro permanente (barato) para poder detectar en los logs de Vercel si
     // dos invocaciones llegan a solaparse — ver commit que quitó el cliente
@@ -243,7 +266,12 @@ async function pullPhase(
           // aplica a la BDD — se ignora esta fila para ese campo, y la Fase B
           // se encarga de corregir la celda de vuelta al valor real.
           if (!row.stockInvalid) {
-            stockPushes.push({ productId: row.productId, bodega: config.bodega, stock: row.stock })
+            // Para pisos por pieza, la celda muestra/recibe CAJAS — se
+            // multiplica por piezas/caja para guardar el total real de
+            // piezas (que es como se maneja el stock en toda la app).
+            const master = masterById.get(row.productId)
+            const stockInPieces = master ? stockFromDisplay(row.stock, master.saleUnit, master.piezas) : row.stock
+            stockPushes.push({ productId: row.productId, bodega: config.bodega, stock: stockInPieces })
           }
 
           if (row.name && row.name !== row.trackedName) {
@@ -340,9 +368,25 @@ async function applyPulls(
 
 // -------- Fase B: reconciliar cada pestaña contra los datos ya actualizados --------
 
+// Los pisos por pieza pueden mostrar un decimal en cajas (ej. "2.5", cuando
+// las piezas en existencia no son múltiplo exacto de piezas/caja) — el resto
+// de los pisos (por caja) se queda con el formato entero de siempre, sin
+// decimales de sobra. Se aplica celda por celda (no a toda la columna) para
+// no afectar el formato de los productos que sí se venden por caja.
+function buildPiezaStockFormatRequests(sheetId: number, rows: MasterRow[]): sheets_v4.Schema$Request[] {
+  return sortByFormatoThenName(rows)
+    .map((row, i) => ({ row, rowIndex0: 1 + i })) // fila índice 0 = headers, datos empiezan en índice 1
+    .filter(({ row }) => row.saleUnit === 'pieza')
+    .map(({ rowIndex0 }) => ({ repeatCell: {
+      range: { sheetId, startRowIndex: rowIndex0, endRowIndex: rowIndex0 + 1, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0.##' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } }))
+}
+
 function buildTabContentValues(rows: MasterRow[]): (string | number)[][] {
   return sortByFormatoThenName(rows).map(it => [
-    it.formato, it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
+    it.formato, it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', stockToDisplay(it), it.precio ?? '',
     it.productId, it.name, it.precio ?? '', it.sku ?? '', it.piezas ?? '', it.m2 ?? '',
   ])
 }
@@ -439,6 +483,9 @@ async function reconcileBodega(
     // layout cambió y una columna visible había quedado oculta por accidente).
     structural.push(...buildHideColumnsRequest(sheetId))
     structural.push(...buildRepeatableStyleRequests(sheetId))
+    // Después del formato entero general de arriba, para que gane en las
+    // filas de pisos por pieza (ver stockToDisplay).
+    structural.push(...buildPiezaStockFormatRequests(sheetId, desired))
 
     if (structurallyDifferent) {
       if (!isNewTab) toClear.push(title)
@@ -471,8 +518,12 @@ async function reconcileBodega(
         if (row.trackedPrice !== authoritative.precio) {
           writes.push({ range: cellRange(title, COL.LAST_SYNCED_PRICE, row.rowIndex1), values: [[authoritative.precio ?? '']] })
         }
-        if (row.stock !== authoritative.stock) {
-          writes.push({ range: cellRange(title, COL.CAJAS_EN_EXISTENCIA, row.rowIndex1), values: [[authoritative.stock]] })
+        // authoritative.stock está en piezas (así se maneja en toda la app) —
+        // se compara/escribe en la unidad que muestra la celda (cajas, para
+        // pisos por pieza), no el número crudo de la BDD.
+        const authoritativeDisplayStock = stockToDisplay(authoritative)
+        if (row.stock !== authoritativeDisplayStock) {
+          writes.push({ range: cellRange(title, COL.CAJAS_EN_EXISTENCIA, row.rowIndex1), values: [[authoritativeDisplayStock]] })
         }
         if (row.sku !== (authoritative.sku ?? '')) {
           writes.push({ range: cellRange(title, COL.SKU, row.rowIndex1), values: [[authoritative.sku ?? '']] })
