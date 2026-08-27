@@ -60,21 +60,22 @@ interface MasterRow {
 
 // Los pisos que se venden por pieza guardan su stock en PIEZAS (así se maneja
 // en toda la app), pero mostrarlo así en Sheets confundía al personal al
-// hacer inventario físico ("¿son piezas o cajas?"). Se muestra en cajas
-// (piezas ÷ piezas que trae la caja del proveedor) y, si editan esa celda,
-// se multiplica de vuelta para guardar el total real de piezas.
-function stockToDisplay(row: Pick<MasterRow, 'stock' | 'saleUnit' | 'piezas'>): number {
+// hacer inventario físico ("¿son piezas o cajas?"). Se separa en cajas
+// completas + piezas sueltas (ej. 27 piezas con 8 piezas/caja = 3 cajas + 3
+// sueltas) en vez de un solo número — así se puede reflejar "0 cajas pero sí
+// hay piezas sueltas" y editar cada parte por separado.
+function stockToBoxesAndPieces(row: Pick<MasterRow, 'stock' | 'saleUnit' | 'piezas'>): { cajas: number; piezasSueltas: number | '' } {
   if (row.saleUnit === 'pieza' && row.piezas && row.piezas > 0) {
-    return parseFloat((row.stock / row.piezas).toFixed(2))
+    return { cajas: Math.floor(row.stock / row.piezas), piezasSueltas: row.stock % row.piezas }
   }
-  return row.stock
+  return { cajas: row.stock, piezasSueltas: '' }
 }
 
-function stockFromDisplay(displayValue: number, saleUnit: 'caja' | 'pieza', piezas: number | null): number {
+function boxesAndPiecesToStock(cajas: number, piezasSueltas: number, saleUnit: 'caja' | 'pieza', piezas: number | null): number {
   if (saleUnit === 'pieza' && piezas && piezas > 0) {
-    return Math.round(displayValue * piezas)
+    return Math.round(cajas * piezas + piezasSueltas)
   }
-  return displayValue
+  return cajas
 }
 
 async function fetchMasterData(supabase: ReturnType<typeof createPlainSupabaseClient>, bodegas: string[]): Promise<Map<string, MasterRow[]>> {
@@ -138,6 +139,10 @@ interface ParsedSheetRow {
   m2: number | null
   m2Invalid: boolean
   trackedM2: number | null
+  // Piezas sueltas (solo pisos por pieza) — sin columna de rastreo propia,
+  // igual que CAJAS EN EXISTENCIA: siempre se toma tal cual esté en la celda.
+  piezasSueltas: number
+  piezasSueltasInvalid: boolean
 }
 
 // Con UNFORMATTED_VALUE, Sheets ya regresa números como number (no string), pero
@@ -188,6 +193,10 @@ function parseTabRows(rows: CellValue[][]): ParsedSheetRow[] {
     const m2Num = cellNum(r[COL.M2_X_CAJA])
     const m2Invalid = (m2Text !== '' && m2Num === null) || (m2Num !== null && m2Num < 0)
 
+    const piezasSueltasText = cellIdText(r[COL.PIEZAS_SUELTAS])
+    const piezasSueltasNum = cellNum(r[COL.PIEZAS_SUELTAS])
+    const piezasSueltasInvalid = (piezasSueltasText !== '' && piezasSueltasNum === null) || (piezasSueltasNum !== null && piezasSueltasNum < 0)
+
     out.push({
       productId,
       rowIndex1: i + 1,
@@ -206,6 +215,8 @@ function parseTabRows(rows: CellValue[][]): ParsedSheetRow[] {
       m2: m2Num,
       m2Invalid,
       trackedM2: cellNum(r[COL.LAST_SYNCED_M2]),
+      piezasSueltas: piezasSueltasInvalid ? 0 : (piezasSueltasNum ?? 0),
+      piezasSueltasInvalid,
     })
   }
   return out
@@ -265,12 +276,12 @@ async function pullPhase(
           // Un valor inválido (texto donde va un número, o negativo) NUNCA se
           // aplica a la BDD — se ignora esta fila para ese campo, y la Fase B
           // se encarga de corregir la celda de vuelta al valor real.
-          if (!row.stockInvalid) {
-            // Para pisos por pieza, la celda muestra/recibe CAJAS — se
-            // multiplica por piezas/caja para guardar el total real de
+          if (!row.stockInvalid && !row.piezasSueltasInvalid) {
+            // Para pisos por pieza, las celdas muestran/reciben CAJAS EN
+            // EXISTENCIA + PIEZAS SUELTAS — se reconstruye el total real de
             // piezas (que es como se maneja el stock en toda la app).
             const master = masterById.get(row.productId)
-            const stockInPieces = master ? stockFromDisplay(row.stock, master.saleUnit, master.piezas) : row.stock
+            const stockInPieces = master ? boxesAndPiecesToStock(row.stock, row.piezasSueltas, master.saleUnit, master.piezas) : row.stock
             stockPushes.push({ productId: row.productId, bodega: config.bodega, stock: stockInPieces })
           }
 
@@ -368,27 +379,14 @@ async function applyPulls(
 
 // -------- Fase B: reconciliar cada pestaña contra los datos ya actualizados --------
 
-// Los pisos por pieza pueden mostrar un decimal en cajas (ej. "2.5", cuando
-// las piezas en existencia no son múltiplo exacto de piezas/caja) — el resto
-// de los pisos (por caja) se queda con el formato entero de siempre, sin
-// decimales de sobra. Se aplica celda por celda (no a toda la columna) para
-// no afectar el formato de los productos que sí se venden por caja.
-function buildPiezaStockFormatRequests(sheetId: number, rows: MasterRow[]): sheets_v4.Schema$Request[] {
-  return sortByFormatoThenName(rows)
-    .map((row, i) => ({ row, rowIndex0: 1 + i })) // fila índice 0 = headers, datos empiezan en índice 1
-    .filter(({ row }) => row.saleUnit === 'pieza')
-    .map(({ rowIndex0 }) => ({ repeatCell: {
-      range: { sheetId, startRowIndex: rowIndex0, endRowIndex: rowIndex0 + 1, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
-      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0.##' } } },
-      fields: 'userEnteredFormat.numberFormat',
-    } }))
-}
-
 function buildTabContentValues(rows: MasterRow[]): (string | number)[][] {
-  return sortByFormatoThenName(rows).map(it => [
-    it.formato, it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', stockToDisplay(it), it.precio ?? '',
-    it.productId, it.name, it.precio ?? '', it.sku ?? '', it.piezas ?? '', it.m2 ?? '',
-  ])
+  return sortByFormatoThenName(rows).map(it => {
+    const { cajas, piezasSueltas } = stockToBoxesAndPieces(it)
+    return [
+      it.formato, it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', cajas, piezasSueltas, it.precio ?? '',
+      it.productId, it.name, it.precio ?? '', it.sku ?? '', it.piezas ?? '', it.m2 ?? '',
+    ]
+  })
 }
 
 function buildMergeRequestsForGroups(sheetId: number, rows: MasterRow[]): sheets_v4.Schema$Request[] {
@@ -483,9 +481,6 @@ async function reconcileBodega(
     // layout cambió y una columna visible había quedado oculta por accidente).
     structural.push(...buildHideColumnsRequest(sheetId))
     structural.push(...buildRepeatableStyleRequests(sheetId))
-    // Después del formato entero general de arriba, para que gane en las
-    // filas de pisos por pieza (ver stockToDisplay).
-    structural.push(...buildPiezaStockFormatRequests(sheetId, desired))
 
     if (structurallyDifferent) {
       if (!isNewTab) toClear.push(title)
@@ -519,11 +514,14 @@ async function reconcileBodega(
           writes.push({ range: cellRange(title, COL.LAST_SYNCED_PRICE, row.rowIndex1), values: [[authoritative.precio ?? '']] })
         }
         // authoritative.stock está en piezas (así se maneja en toda la app) —
-        // se compara/escribe en la unidad que muestra la celda (cajas, para
-        // pisos por pieza), no el número crudo de la BDD.
-        const authoritativeDisplayStock = stockToDisplay(authoritative)
-        if (row.stock !== authoritativeDisplayStock) {
-          writes.push({ range: cellRange(title, COL.CAJAS_EN_EXISTENCIA, row.rowIndex1), values: [[authoritativeDisplayStock]] })
+        // se compara/escribe en las unidades que muestran las celdas (cajas +
+        // piezas sueltas, para pisos por pieza), no el número crudo de la BDD.
+        const { cajas: authoritativeCajas, piezasSueltas: authoritativePiezasSueltas } = stockToBoxesAndPieces(authoritative)
+        if (row.stock !== authoritativeCajas) {
+          writes.push({ range: cellRange(title, COL.CAJAS_EN_EXISTENCIA, row.rowIndex1), values: [[authoritativeCajas]] })
+        }
+        if (row.piezasSueltas !== (authoritativePiezasSueltas === '' ? 0 : authoritativePiezasSueltas)) {
+          writes.push({ range: cellRange(title, COL.PIEZAS_SUELTAS, row.rowIndex1), values: [[authoritativePiezasSueltas]] })
         }
         if (row.sku !== (authoritative.sku ?? '')) {
           writes.push({ range: cellRange(title, COL.SKU, row.rowIndex1), values: [[authoritative.sku ?? '']] })

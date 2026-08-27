@@ -11,17 +11,21 @@ export const COL = {
   PIEZAS_X_CAJA: 3,
   M2_X_CAJA: 4,
   CAJAS_EN_EXISTENCIA: 5,
-  PRECIO: 6,
-  PRODUCT_ID: 7,
-  LAST_SYNCED_NAME: 8,
-  LAST_SYNCED_PRICE: 9,
-  LAST_SYNCED_SKU: 10,
-  LAST_SYNCED_PIEZAS: 11,
-  LAST_SYNCED_M2: 12,
+  // Solo aplica a pisos por pieza — cajas completas ya no alcanzan para
+  // representar "quedan 3 piezas sueltas, ni una caja completa". Para pisos
+  // por caja esta columna siempre queda en blanco/sin uso.
+  PIEZAS_SUELTAS: 6,
+  PRECIO: 7,
+  PRODUCT_ID: 8,
+  LAST_SYNCED_NAME: 9,
+  LAST_SYNCED_PRICE: 10,
+  LAST_SYNCED_SKU: 11,
+  LAST_SYNCED_PIEZAS: 12,
+  LAST_SYNCED_M2: 13,
 } as const
 
 export const HEADERS = [
-  'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
+  'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PIEZAS SUELTAS', 'PRECIO',
   '_product_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku', '_last_synced_piezas', '_last_synced_m2',
 ]
 
@@ -258,12 +262,12 @@ export function buildProtectionRequests(sheetId: number, serviceAccountEmail: st
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.SKU, endColumnIndex: COL.SKU + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.DESCRIPCION, endColumnIndex: COL.DESCRIPCION + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.PIEZAS_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
-        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.PIEZAS_SUELTAS + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.PRECIO, endColumnIndex: COL.PRECIO + 1 },
       ]
     : [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.DESCRIPCION, endColumnIndex: COL.DESCRIPCION + 1 },
-        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.PIEZAS_SUELTAS + 1 },
       ]
 
   requests.push({ addProtectedRange: { protectedRange: {
@@ -397,6 +401,14 @@ export function buildNumberFormatRequests(sheetId: number): sheets_v4.Schema$Req
       fields: 'userEnteredFormat.numberFormat',
     } },
     { repeatCell: {
+      // Explícito por la misma razón que CAJAS EN EXISTENCIA arriba — esta
+      // columna es nueva, pisa cualquier formato heredado de cuando esta
+      // posición física solía ser PRECIO.
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL.PIEZAS_SUELTAS, endColumnIndex: COL.PIEZAS_SUELTAS + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL.PRECIO, endColumnIndex: COL.PRECIO + 1 },
       cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '"$"#,##0.##' } } },
       fields: 'userEnteredFormat.numberFormat',
@@ -427,7 +439,7 @@ export function buildFilterRequest(sheetId: number): sheets_v4.Schema$Request {
 export function buildColumnWidthRequests(sheetId: number): sheets_v4.Schema$Request[] {
   const widths: [number, number][] = [
     [COL.FORMATO, 80], [COL.SKU, 110], [COL.DESCRIPCION, 240], [COL.PIEZAS_X_CAJA, 100],
-    [COL.M2_X_CAJA, 90], [COL.CAJAS_EN_EXISTENCIA, 150], [COL.PRECIO, 100],
+    [COL.M2_X_CAJA, 90], [COL.CAJAS_EN_EXISTENCIA, 130], [COL.PIEZAS_SUELTAS, 120], [COL.PRECIO, 100],
   ]
   return widths.map(([index, pixelSize]) => ({
     updateDimensionProperties: {
