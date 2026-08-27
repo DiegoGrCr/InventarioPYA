@@ -338,7 +338,7 @@ async function reconcileMeshBodega(
       const { protectedRangeIds, conditionalFormatCount } = await getSheetProtectionState(sheets, config.spreadsheetId, sheetId!)
       structural.push(...buildClearProtectionsAndFormatsRequests(sheetId!, protectedRangeIds, conditionalFormatCount))
     }
-    structural.push(...buildMeshProtectionRequests(sheetId!, serviceAccountEmail, isFullyEditableBodega(config.bodega)))
+    structural.push(...buildMeshProtectionRequests(sheetId!, serviceAccountEmail, freshRows.length, isFullyEditableBodega(config.bodega)))
     structural.push(buildFreezeHeaderRequest(sheetId!))
     structural.push(buildMeshZeroStockHighlightRequest(sheetId!))
     structural.push(buildMeshLowStockHighlightRequest(sheetId!))

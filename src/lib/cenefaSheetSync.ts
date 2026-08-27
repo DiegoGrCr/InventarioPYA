@@ -318,7 +318,7 @@ async function reconcileCenefaBodega(
       const { protectedRangeIds, conditionalFormatCount } = await getSheetProtectionState(sheets, config.spreadsheetId, sheetId!)
       structural.push(...buildClearProtectionsAndFormatsRequests(sheetId!, protectedRangeIds, conditionalFormatCount))
     }
-    structural.push(...buildCenefaProtectionRequests(sheetId!, serviceAccountEmail, isFullyEditableBodega(config.bodega)))
+    structural.push(...buildCenefaProtectionRequests(sheetId!, serviceAccountEmail, freshRows.length, isFullyEditableBodega(config.bodega)))
     structural.push(buildFreezeHeaderRequest(sheetId!))
     structural.push(buildCenefaZeroStockHighlightRequest(sheetId!))
     structural.push(buildCenefaLowStockHighlightRequest(sheetId!))

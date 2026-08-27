@@ -198,7 +198,13 @@ export async function createMissingTabs(sheets: sheets_v4.Sheets, spreadsheetId:
 // se queda protegido siempre: no es texto libre, es una referencia a la
 // tabla de medidas, y el sync no sabe qué hacer si alguien escribe una
 // medida que no existe todavía.
-export function buildProtectionRequests(sheetId: number, serviceAccountEmail: string, fullyEditable = false): sheets_v4.Schema$Request[] {
+//
+// rowCount: cuántas filas de producto tiene esta pestaña ahora mismo — los
+// huecos editables solo cubren esas filas, no toda la columna hacia abajo.
+// Sin este límite, cualquiera podía escribir texto suelto en filas vacías
+// después del último producto real (esas filas no tienen ID así que el sync
+// las ignora, pero visualmente parecía que "sí se guardaba" ahí).
+export function buildProtectionRequests(sheetId: number, serviceAccountEmail: string, rowCount: number, fullyEditable = false): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
   const requests: sheets_v4.Schema$Request[] = []
 
@@ -246,17 +252,18 @@ export function buildProtectionRequests(sheetId: number, serviceAccountEmail: st
   // celdas puntuales), esta también evita que alguien sin permiso borre,
   // renombre o mueva la pestaña. unprotectedRanges dentro de esta misma
   // protección deja libres exactamente las mismas celdas de siempre.
+  const editableEndRow = 1 + rowCount
   const unprotectedRanges = fullyEditable
     ? [
-        { sheetId, startRowIndex: 1, startColumnIndex: COL.SKU, endColumnIndex: COL.SKU + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL.DESCRIPCION, endColumnIndex: COL.DESCRIPCION + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL.PIEZAS_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL.PRECIO, endColumnIndex: COL.PRECIO + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.SKU, endColumnIndex: COL.SKU + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.DESCRIPCION, endColumnIndex: COL.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.PIEZAS_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.PRECIO, endColumnIndex: COL.PRECIO + 1 },
       ]
     : [
-        { sheetId, startRowIndex: 1, startColumnIndex: COL.DESCRIPCION, endColumnIndex: COL.DESCRIPCION + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.DESCRIPCION, endColumnIndex: COL.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.CAJAS_EN_EXISTENCIA + 1 },
       ]
 
   requests.push({ addProtectedRange: { protectedRange: {
@@ -541,7 +548,7 @@ const VISIBLE_COLS_ACC = { startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: 
 // propio rastreo _last_synced_*). CATEGORÍA y MARCA se quedan protegidas
 // siempre — CATEGORÍA está fusionada en bloques y cambiarla requiere mover
 // la fila de bloque, y MARCA no tiene rastreo propio todavía.
-export function buildAccessoryProtectionRequests(sheetId: number, serviceAccountEmail: string, fullyEditable = false): sheets_v4.Schema$Request[] {
+export function buildAccessoryProtectionRequests(sheetId: number, serviceAccountEmail: string, rowCount: number, fullyEditable = false): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
   const requests: sheets_v4.Schema$Request[] = []
 
@@ -574,12 +581,13 @@ export function buildAccessoryProtectionRequests(sheetId: number, serviceAccount
     } } },
   )
 
+  const editableEndRow = 1 + rowCount
   const unprotectedRanges = fullyEditable
     ? [
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 },
       ]
     : [
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.CANTIDAD, endColumnIndex: COL_ACC.CANTIDAD + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_ACC.CANTIDAD, endColumnIndex: COL_ACC.CANTIDAD + 1 },
       ]
 
   // Protección de la PESTAÑA completa — ver el equivalente de Pisos
@@ -777,7 +785,7 @@ const MESH_ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL_MESH.MARCA, endCo
 // CAJA/M² X CAJA/PRECIO. FOTO y MARCA/FORMATO se quedan protegidos siempre —
 // FOTO es una fórmula que genera el sync, y MARCA/FORMATO son referencias a
 // catálogos aparte, no texto libre.
-export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail: string, fullyEditable = false): sheets_v4.Schema$Request[] {
+export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail: string, rowCount: number, fullyEditable = false): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
   const requests: sheets_v4.Schema$Request[] = []
 
@@ -814,17 +822,18 @@ export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail
     } } },
   )
 
+  const editableEndRow = 1 + rowCount
   const unprotectedRanges = fullyEditable
     ? [
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.SKU, endColumnIndex: COL_MESH.SKU + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.DESCRIPCION, endColumnIndex: COL_MESH.DESCRIPCION + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.PIEZAS_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.PRECIO, endColumnIndex: COL_MESH.PRECIO + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.SKU, endColumnIndex: COL_MESH.SKU + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.DESCRIPCION, endColumnIndex: COL_MESH.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.PIEZAS_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.PRECIO, endColumnIndex: COL_MESH.PRECIO + 1 },
       ]
     : [
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.DESCRIPCION, endColumnIndex: COL_MESH.DESCRIPCION + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.DESCRIPCION, endColumnIndex: COL_MESH.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA + 1 },
       ]
 
   // Protección de la PESTAÑA completa — ver el equivalente de Pisos
@@ -987,7 +996,7 @@ const VISIBLE_COLS_CENEFA = { startColumnIndex: COL_CENEFA.MARCA, endColumnIndex
 // ver isFullyEditableBodega en sheetSync.ts): también deja libres SKU/PIEZAS
 // X CAJA/M² X CAJA/PRECIO. MARCA/FORMATO se quedan protegidos siempre —
 // son referencias a catálogos aparte, no texto libre.
-export function buildCenefaProtectionRequests(sheetId: number, serviceAccountEmail: string, fullyEditable = false): sheets_v4.Schema$Request[] {
+export function buildCenefaProtectionRequests(sheetId: number, serviceAccountEmail: string, rowCount: number, fullyEditable = false): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
   const requests: sheets_v4.Schema$Request[] = []
 
@@ -1024,17 +1033,18 @@ export function buildCenefaProtectionRequests(sheetId: number, serviceAccountEma
     } } },
   )
 
+  const editableEndRow = 1 + rowCount
   const unprotectedRanges = fullyEditable
     ? [
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.SKU, endColumnIndex: COL_CENEFA.SKU + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.DESCRIPCION, endColumnIndex: COL_CENEFA.DESCRIPCION + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.PIEZAS_X_CAJA, endColumnIndex: COL_CENEFA.M2_X_CAJA + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.PRECIO, endColumnIndex: COL_CENEFA.PRECIO + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.SKU, endColumnIndex: COL_CENEFA.SKU + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.DESCRIPCION, endColumnIndex: COL_CENEFA.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.PIEZAS_X_CAJA, endColumnIndex: COL_CENEFA.M2_X_CAJA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.PRECIO, endColumnIndex: COL_CENEFA.PRECIO + 1 },
       ]
     : [
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.DESCRIPCION, endColumnIndex: COL_CENEFA.DESCRIPCION + 1 },
-        { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.DESCRIPCION, endColumnIndex: COL_CENEFA.DESCRIPCION + 1 },
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA + 1 },
       ]
 
   // Protección de la PESTAÑA completa — ver el equivalente de Pisos
