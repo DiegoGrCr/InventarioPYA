@@ -319,10 +319,11 @@ const COLORS = {
   border: 'B0B8C1',
 }
 
-// Mismo umbral que getStockStatus() en lib/utils.ts (el que pinta el badge
-// amarillo "Stock bajo" en la página) — 1 a 5 cajas/piezas inclusive. 0 ya
-// tiene su propio color (rojo) por separado, así que aquí se excluye a propósito.
-const LOW_STOCK_THRESHOLD = 5
+// Umbral de "stock bajo" para Sheets — 1 a 7 cajas/piezas inclusive (distinto
+// al badge amarillo de la página, que sigue usando 5 vía getStockStatus() en
+// lib/utils.ts). 0 ya tiene su propio color (rojo) por separado, así que se
+// excluye a propósito.
+const LOW_STOCK_THRESHOLD = 7
 
 function hexToRgb(hex: string) {
   return {
