@@ -5,7 +5,7 @@ import { isFullyEditableBodega } from './sheetSync'
 import {
   listTabs, batchGetTabValues, batchWriteCells, batchClearTabs,
   applyStructuralRequests, createMissingTabs, buildMeshProtectionRequests,
-  buildMeshHideColumnsRequest, buildFreezeHeaderRequest, buildMeshZeroStockHighlightRequest,
+  buildMeshHideColumnsRequest, buildFreezeHeaderRequest, buildMeshZeroStockHighlightRequest, buildMeshLowStockHighlightRequest,
   buildMeshRepeatableStyleRequests, cellRange, rowRangeMesh, colRange,
   getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
   COL_MESH, HEADERS_MESH, MESH_TAB_NAME, TabInfo, CellValue,
@@ -341,6 +341,7 @@ async function reconcileMeshBodega(
     structural.push(...buildMeshProtectionRequests(sheetId!, serviceAccountEmail, isFullyEditableBodega(config.bodega)))
     structural.push(buildFreezeHeaderRequest(sheetId!))
     structural.push(buildMeshZeroStockHighlightRequest(sheetId!))
+    structural.push(buildMeshLowStockHighlightRequest(sheetId!))
     writes.push({ range: rowRangeMesh(MESH_TAB_NAME, 1, 1), values: [HEADERS_MESH] })
   }
   structural.push(...buildMeshHideColumnsRequest(sheetId!))

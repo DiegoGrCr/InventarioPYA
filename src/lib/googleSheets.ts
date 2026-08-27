@@ -315,8 +315,14 @@ const COLORS = {
   headerBg: 'D9E2F3',
   headerText: '1E293B',
   zeroBg: 'F8D7DA',
+  lowBg: 'FFF3CD',
   border: 'B0B8C1',
 }
+
+// Mismo umbral que getStockStatus() en lib/utils.ts (el que pinta el badge
+// amarillo "Stock bajo" en la página) — 1 a 5 cajas/piezas inclusive. 0 ya
+// tiene su propio color (rojo) por separado, así que aquí se excluye a propósito.
+const LOW_STOCK_THRESHOLD = 5
 
 function hexToRgb(hex: string) {
   return {
@@ -449,6 +455,22 @@ export function buildZeroStockHighlightRequest(sheetId: number): sheets_v4.Schem
         // a diferencia de cuando el archivo estaba en es_ES).
         condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL.PRODUCT_ID)}2<>"",$${colLetter(COL.CAJAS_EN_EXISTENCIA)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
+      },
+    },
+    index: 0,
+  } }
+}
+
+// Mismo criterio que buildZeroStockHighlightRequest, pero para stock bajo
+// (1 a LOW_STOCK_THRESHOLD) — mismo rango de columnas, excluye a propósito el
+// 0 (que ya tiene su propio color) para que nunca se traslapen.
+export function buildLowStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { addConditionalFormatRule: {
+    rule: {
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...ZERO_STOCK_HIGHLIGHT_COLS }],
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL.PRODUCT_ID)}2<>"",$${colLetter(COL.CAJAS_EN_EXISTENCIA)}2>0,$${colLetter(COL.CAJAS_EN_EXISTENCIA)}2<=${LOW_STOCK_THRESHOLD})` }] },
+        format: { backgroundColor: hexToRgb(COLORS.lowBg) },
       },
     },
     index: 0,
@@ -613,6 +635,19 @@ export function buildAccessoryZeroStockHighlightRequest(sheetId: number): sheets
       booleanRule: {
         condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"",$${colLetter(COL_ACC.CANTIDAD)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
+      },
+    },
+    index: 0,
+  } }
+}
+
+export function buildAccessoryLowStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { addConditionalFormatRule: {
+    rule: {
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.MARCA, endColumnIndex: COL_ACC.PRECIO + 1 }],
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"",$${colLetter(COL_ACC.CANTIDAD)}2>0,$${colLetter(COL_ACC.CANTIDAD)}2<=${LOW_STOCK_THRESHOLD})` }] },
+        format: { backgroundColor: hexToRgb(COLORS.lowBg) },
       },
     },
     index: 0,
@@ -831,6 +866,19 @@ export function buildMeshZeroStockHighlightRequest(sheetId: number): sheets_v4.S
   } }
 }
 
+export function buildMeshLowStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { addConditionalFormatRule: {
+    rule: {
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...MESH_ZERO_STOCK_HIGHLIGHT_COLS }],
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_MESH.MESH_ID)}2<>"",$${colLetter(COL_MESH.CAJAS_EN_EXISTENCIA)}2>0,$${colLetter(COL_MESH.CAJAS_EN_EXISTENCIA)}2<=${LOW_STOCK_THRESHOLD})` }] },
+        format: { backgroundColor: hexToRgb(COLORS.lowBg) },
+      },
+    },
+    index: 0,
+  } }
+}
+
 export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$Request[] {
   const style = { style: 'SOLID' as const, color: hexToRgb(COLORS.border) }
   const widths: [number, number][] = [
@@ -1022,6 +1070,19 @@ export function buildCenefaZeroStockHighlightRequest(sheetId: number): sheets_v4
       booleanRule: {
         condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_CENEFA.CENEFA_ID)}2<>"",$${colLetter(COL_CENEFA.CAJAS_EN_EXISTENCIA)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
+      },
+    },
+    index: 0,
+  } }
+}
+
+export function buildCenefaLowStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { addConditionalFormatRule: {
+    rule: {
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_CENEFA }],
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_CENEFA.CENEFA_ID)}2<>"",$${colLetter(COL_CENEFA.CAJAS_EN_EXISTENCIA)}2>0,$${colLetter(COL_CENEFA.CAJAS_EN_EXISTENCIA)}2<=${LOW_STOCK_THRESHOLD})` }] },
+        format: { backgroundColor: hexToRgb(COLORS.lowBg) },
       },
     },
     index: 0,

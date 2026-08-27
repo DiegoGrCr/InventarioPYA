@@ -6,7 +6,7 @@ import {
   getSheetsClient, listTabs, batchGetTabValues, batchWriteCells, batchClearTabs,
   applyStructuralRequests, createMissingTabs, buildProtectionRequests, buildHideColumnsRequest,
   buildFreezeHeaderRequest, buildUnmergeRequest, buildMergeRequest, cellRange, rowRange,
-  buildRepeatableStyleRequests, buildZeroStockHighlightRequest,
+  buildRepeatableStyleRequests, buildZeroStockHighlightRequest, buildLowStockHighlightRequest,
   getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
   COL, HEADERS, TabInfo, CellValue, MESH_TAB_NAME, ACCESSORY_TAB_NAME, CENEFA_TAB_NAME,
 } from './googleSheets'
@@ -430,6 +430,7 @@ async function reconcileBodega(
       structural.push(...buildProtectionRequests(sheetId, serviceAccountEmail, isFullyEditableBodega(config.bodega)))
       structural.push(buildFreezeHeaderRequest(sheetId))
       structural.push(buildZeroStockHighlightRequest(sheetId))
+      structural.push(buildLowStockHighlightRequest(sheetId))
       writes.push({ range: rowRange(title, 1, 1), values: [HEADERS] })
     }
     // El formato visual (colores, bordes, moneda, anchos, filtro) y qué

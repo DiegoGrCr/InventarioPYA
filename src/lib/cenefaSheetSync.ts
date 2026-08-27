@@ -5,7 +5,7 @@ import { isFullyEditableBodega } from './sheetSync'
 import {
   listTabs, batchGetTabValues, batchWriteCells, batchClearTabs,
   applyStructuralRequests, createMissingTabs, buildCenefaProtectionRequests,
-  buildCenefaHideColumnsRequest, buildFreezeHeaderRequest, buildCenefaZeroStockHighlightRequest,
+  buildCenefaHideColumnsRequest, buildFreezeHeaderRequest, buildCenefaZeroStockHighlightRequest, buildCenefaLowStockHighlightRequest,
   buildCenefaRepeatableStyleRequests, cellRange, rowRangeCenefa,
   getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
   COL_CENEFA, HEADERS_CENEFA, CENEFA_TAB_NAME, TabInfo, CellValue,
@@ -321,6 +321,7 @@ async function reconcileCenefaBodega(
     structural.push(...buildCenefaProtectionRequests(sheetId!, serviceAccountEmail, isFullyEditableBodega(config.bodega)))
     structural.push(buildFreezeHeaderRequest(sheetId!))
     structural.push(buildCenefaZeroStockHighlightRequest(sheetId!))
+    structural.push(buildCenefaLowStockHighlightRequest(sheetId!))
     writes.push({ range: rowRangeCenefa(CENEFA_TAB_NAME, 1, 1), values: [HEADERS_CENEFA] })
   }
   structural.push(...buildCenefaHideColumnsRequest(sheetId!))

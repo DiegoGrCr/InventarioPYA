@@ -5,7 +5,7 @@ import { isFullyEditableBodega } from './sheetSync'
 import {
   listTabs, batchGetTabValues, batchWriteCells, batchClearTabs,
   applyStructuralRequests, createMissingTabs, buildAccessoryProtectionRequests,
-  buildAccessoryHideColumnsRequest, buildFreezeHeaderRequest, buildAccessoryZeroStockHighlightRequest,
+  buildAccessoryHideColumnsRequest, buildFreezeHeaderRequest, buildAccessoryZeroStockHighlightRequest, buildAccessoryLowStockHighlightRequest,
   buildAccessoryRepeatableStyleRequests, buildAccessoryUnmergeRequest, buildAccessoryMergeRequest,
   cellRange, rowRangeAcc,
   getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
@@ -317,6 +317,7 @@ async function reconcileAccessoryBodega(
     structural.push(...buildAccessoryProtectionRequests(sheetId!, serviceAccountEmail, isFullyEditableBodega(config.bodega)))
     structural.push(buildFreezeHeaderRequest(sheetId!))
     structural.push(buildAccessoryZeroStockHighlightRequest(sheetId!))
+    structural.push(buildAccessoryLowStockHighlightRequest(sheetId!))
     writes.push({ range: rowRangeAcc(ACCESSORY_TAB_NAME, 1, 1), values: [HEADERS_ACC] })
   }
   structural.push(...buildAccessoryHideColumnsRequest(sheetId!))
