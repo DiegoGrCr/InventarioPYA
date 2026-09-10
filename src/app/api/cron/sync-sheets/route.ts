@@ -32,10 +32,15 @@ export async function GET(req: NextRequest) {
   // mal capturada en Vercel (apuntaba al archivo de Arroyo) — no un bug de
   // concurrencia. Ya corregido y verificado con una alta real de producto.
   const allowStructural = req.nextUrl.searchParams.get('structural') !== '0'
+  // "rebuild=1": fuerza reconstrucción completa de TODAS las pestañas de
+  // Pisos aunque el conjunto de productos no haya cambiado — uso manual
+  // puntual (ej. tras corregir el orden/agrupamiento) para reordenar filas
+  // ya escritas que una sincronización incremental normal no tocaría.
+  const forceRebuildAll = req.nextUrl.searchParams.get('rebuild') === '1'
   const invocationId = crypto.randomUUID()
 
   try {
-    const summary = await syncAllBodegas({ allowStructural, invocationId })
+    const summary = await syncAllBodegas({ allowStructural, invocationId, forceRebuildAll })
     return NextResponse.json({ invocationId, ...summary })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Error desconocido' }, { status: 500 })

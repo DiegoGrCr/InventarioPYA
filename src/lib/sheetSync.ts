@@ -409,6 +409,7 @@ async function reconcileBodega(
   freshRows: MasterRow[],
   allowStructural: boolean,
   invocationId: string,
+  forceRebuildAll = false,
 ): Promise<BodegaResult> {
   const { config, tabs, rowsByTab } = state
   const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!
@@ -452,7 +453,13 @@ async function reconcileBodega(
     const actualRows = isNewTab ? [] : (rowsByTab.get(title) || [])
     const desiredIds = new Set(desired.map(r => r.productId))
     const actualIds = new Set(actualRows.map(r => r.productId))
-    const structurallyDifferent = isNewTab || desiredIds.size !== actualIds.size || [...desiredIds].some(id => !actualIds.has(id))
+    // forceRebuildAll: interruptor temporal de uso manual (ver ?rebuild=1 en
+    // el cron) para reconstruir el contenido/orden de TODAS las pestañas
+    // aunque el conjunto de productos no haya cambiado — ej. tras corregir
+    // sortByFormatoThenName, las filas ya escritas quedaron mal agrupadas y
+    // sólo una reconstrucción completa (no una escritura incremental) las
+    // reordena.
+    const structurallyDifferent = isNewTab || forceRebuildAll || desiredIds.size !== actualIds.size || [...desiredIds].some(id => !actualIds.has(id))
 
     if (structurallyDifferent && !allowStructural) {
       needsReview.push(title)
@@ -631,8 +638,9 @@ async function assertBodegaMembership(supabase: ReturnType<typeof createPlainSup
   }
 }
 
-export async function syncAllBodegas(options?: { allowStructural?: boolean; invocationId?: string }): Promise<SyncSummary> {
+export async function syncAllBodegas(options?: { allowStructural?: boolean; invocationId?: string; forceRebuildAll?: boolean }): Promise<SyncSummary> {
   const allowStructural = options?.allowStructural ?? true
+  const forceRebuildAll = options?.forceRebuildAll ?? false
   const invocationId = options?.invocationId ?? crypto.randomUUID()
   const startedAt = Date.now()
   const configs = getConfiguredBodegas()
@@ -667,7 +675,7 @@ export async function syncAllBodegas(options?: { allowStructural?: boolean; invo
       try {
         const rowsForBodega = freshMaster.get(state.config.bodega) || []
         await assertBodegaMembership(supabase, state.config.bodega, rowsForBodega)
-        const result = await reconcileBodega(sheets, state, rowsForBodega, allowStructural, invocationId)
+        const result = await reconcileBodega(sheets, state, rowsForBodega, allowStructural, invocationId, forceRebuildAll)
         summary.bodegas.push(result)
       } catch (err) {
         summary.bodegas.push({ bodega: state.config.bodega, rebuiltTabs: [], cellsWritten: 0, error: err instanceof Error ? err.message : String(err) })
