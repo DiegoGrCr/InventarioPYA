@@ -537,11 +537,15 @@ export const COL_ACC = {
   // al bloque fusionado correcto.
   LAST_SYNCED_CATEGORY: 9,
   LAST_SYNCED_SKU: 10,
+  // Mismo motivo que LAST_SYNCED_CATEGORY, pero para MARCA — también quedó
+  // fusionada en bloques (ver buildAccessoryBrandMergeRequest), así que un
+  // cambio de marca también necesita disparar reconstrucción completa.
+  LAST_SYNCED_MARCA: 11,
 } as const
 
 export const HEADERS_ACC = [
   'CATEGORÍA', 'MARCA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO',
-  '_accessory_id', '_last_synced_name', '_last_synced_price', '_last_synced_category', '_last_synced_sku',
+  '_accessory_id', '_last_synced_name', '_last_synced_price', '_last_synced_category', '_last_synced_sku', '_last_synced_marca',
 ]
 
 export const ACCESSORY_TAB_NAME = 'Adhesivos'
@@ -549,7 +553,7 @@ export const ACCESSORY_TAB_NAME = 'Adhesivos'
 // Gemelo de rowRange() para el layout de Adhesivos — rowRange() hardcodea la
 // columna final en COL.LAST_SYNCED_PRICE (propia de Pisos, columna I).
 export function rowRangeAcc(title: string, startRow1: number, endRow1: number): string {
-  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_ACC.LAST_SYNCED_SKU)}${endRow1}`
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_ACC.LAST_SYNCED_MARCA)}${endRow1}`
 }
 
 const VISIBLE_COLS_ACC = { startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.PRECIO + 1 }
@@ -584,7 +588,7 @@ export function buildAccessoryProtectionRequests(sheetId: number, serviceAccount
 
   requests.push(
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_ACC.ACCESSORY_ID, endColumnIndex: COL_ACC.LAST_SYNCED_SKU + 1 },
+      range: { sheetId, startColumnIndex: COL_ACC.ACCESSORY_ID, endColumnIndex: COL_ACC.LAST_SYNCED_MARCA + 1 },
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
@@ -628,6 +632,21 @@ export function buildAccessoryMergeRequest(sheetId: number, startRow0: number, e
   } }
 }
 
+// Combina/descombina MARCA en bloques — igual que CATEGORÍA arriba, pero
+// siempre anidada DENTRO de cada bloque de categoría (ver
+// buildAccessoryBrandMergeRequestsForGroups en accessorySheetSync.ts) para
+// que nunca una marca fusionada cruce de Adhesivo a Boquilla.
+export function buildAccessoryBrandUnmergeRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { unmergeCells: { range: { sheetId, startColumnIndex: COL_ACC.MARCA, endColumnIndex: COL_ACC.MARCA + 1 } } }
+}
+
+export function buildAccessoryBrandMergeRequest(sheetId: number, startRow0: number, endRow0: number): sheets_v4.Schema$Request {
+  return { mergeCells: {
+    range: { sheetId, startRowIndex: startRow0, endRowIndex: endRow0, startColumnIndex: COL_ACC.MARCA, endColumnIndex: COL_ACC.MARCA + 1 },
+    mergeType: 'MERGE_ALL',
+  } }
+}
+
 export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request[] {
   return [
     { updateDimensionProperties: {
@@ -636,7 +655,7 @@ export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Sch
       fields: 'hiddenByUser',
     } },
     { updateDimensionProperties: {
-      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.ACCESSORY_ID, endIndex: COL_ACC.LAST_SYNCED_SKU + 1 },
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.ACCESSORY_ID, endIndex: COL_ACC.LAST_SYNCED_MARCA + 1 },
       properties: { hiddenByUser: true },
       fields: 'hiddenByUser',
     } },
@@ -646,13 +665,12 @@ export function buildAccessoryHideColumnsRequest(sheetId: number): sheets_v4.Sch
 export function buildAccessoryZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
   return { addConditionalFormatRule: {
     rule: {
-      // OJO: arranca en MARCA, no en CATEGORÍA — CATEGORÍA está fusionada en
-      // bloques grandes (Adhesivo/Boquilla) y una fórmula por-fila no se
-      // puede pintar de forma sensata ahí: si UNA fila del bloque tiene stock
-      // en 0, pintaría el bloque entero de rojo aunque el resto sí tenga stock.
-      // MARCA sí es una celda normal por fila (no fusionada), así que puede
-      // entrar en el rango igual que SKU/DESCRIPCIÓN/PRECIO.
-      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.MARCA, endColumnIndex: COL_ACC.PRECIO + 1 }],
+      // OJO: arranca en SKU, no en CATEGORÍA ni MARCA — ambas quedaron
+      // fusionadas en bloques grandes y una fórmula por-fila no se puede
+      // pintar de forma sensata ahí: si UNA fila del bloque tiene stock en 0,
+      // pintaría el bloque entero de rojo aunque el resto sí tenga stock.
+      // SKU sí es una celda normal por fila (no fusionada).
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 }],
       booleanRule: {
         condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"",$${colLetter(COL_ACC.CANTIDAD)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
@@ -665,7 +683,7 @@ export function buildAccessoryZeroStockHighlightRequest(sheetId: number): sheets
 export function buildAccessoryLowStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
   return { addConditionalFormatRule: {
     rule: {
-      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.MARCA, endColumnIndex: COL_ACC.PRECIO + 1 }],
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 }],
       booleanRule: {
         condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"",$${colLetter(COL_ACC.CANTIDAD)}2>0,$${colLetter(COL_ACC.CANTIDAD)}2<=${LOW_STOCK_THRESHOLD})` }] },
         format: { backgroundColor: hexToRgb(COLORS.lowBg) },
@@ -706,6 +724,13 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
       // Igual que FORMATO en Pisos: centrado, para que se vea bien como
       // bloque grande fusionado (Adhesivo/Boquilla).
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.CATEGORIA + 1 },
+      cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true } } },
+      fields: 'userEnteredFormat(horizontalAlignment,textFormat)',
+    } },
+    { repeatCell: {
+      // MARCA también queda fusionada en bloques (dentro de cada categoría) —
+      // mismo tratamiento visual que CATEGORÍA.
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.MARCA, endColumnIndex: COL_ACC.MARCA + 1 },
       cell: { userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true } } },
       fields: 'userEnteredFormat(horizontalAlignment,textFormat)',
     } },

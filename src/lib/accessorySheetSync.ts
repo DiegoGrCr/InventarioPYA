@@ -7,6 +7,7 @@ import {
   applyStructuralRequests, createMissingTabs, buildAccessoryProtectionRequests,
   buildAccessoryHideColumnsRequest, buildFreezeHeaderRequest, buildAccessoryZeroStockHighlightRequest, buildAccessoryLowStockHighlightRequest,
   buildAccessoryRepeatableStyleRequests, buildAccessoryUnmergeRequest, buildAccessoryMergeRequest,
+  buildAccessoryBrandUnmergeRequest, buildAccessoryBrandMergeRequest,
   cellRange, rowRangeAcc,
   getSheetProtectionState, buildClearProtectionsAndFormatsRequests,
   COL_ACC, HEADERS_ACC, ACCESSORY_TAB_NAME, TabInfo, CellValue,
@@ -49,8 +50,15 @@ async function fetchAccessoryMasterData(supabase: ReturnType<typeof createPlainS
   return result
 }
 
+// Desempate por marca (antes de nombre) para que, además del bloque grande
+// de categoría, cada marca dentro de esa categoría también quede en su
+// propia corrida consecutiva y se pueda fusionar (ver
+// buildAccessoryBrandMergeRequestsForGroups) — mismo motivo que formato
+// en sortByFormatoThenName (inventoryGrouping.ts).
 function sortAccessoryRows(rows: AccessoryMasterRow[]): AccessoryMasterRow[] {
-  return [...rows].sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+  return [...rows].sort((a, b) =>
+    a.category.localeCompare(b.category) || (a.brand || 'Sin marca').localeCompare(b.brand || 'Sin marca') || a.name.localeCompare(b.name)
+  )
 }
 
 interface CategoryGroup { category: string; items: AccessoryMasterRow[] }
@@ -72,6 +80,25 @@ function groupConsecutiveByCategory(items: AccessoryMasterRow[]): CategoryGroup[
   return groups
 }
 
+interface BrandGroup { brand: string; items: AccessoryMasterRow[] }
+
+// Igual que groupConsecutiveByCategory, pero por marca — siempre se llama
+// SOBRE los items de un solo grupo de categoría ya separado (nunca sobre la
+// lista completa) para que una fusión de marca nunca cruce de Adhesivo a
+// Boquilla, aunque por coincidencia una marca tenga productos en ambas.
+function groupConsecutiveByBrand(items: AccessoryMasterRow[]): BrandGroup[] {
+  const groups: BrandGroup[] = []
+  let i = 0
+  while (i < items.length) {
+    const brand = items[i].brand || 'Sin marca'
+    let j = i
+    while (j < items.length && (items[j].brand || 'Sin marca') === brand) j++
+    groups.push({ brand, items: items.slice(i, j) })
+    i = j
+  }
+  return groups
+}
+
 // -------- Fase A: leer la pestaña y detectar qué cambió del lado del personal --------
 // Mismas reglas de valor inválido ya probadas para Pisos (ver sheetSync.ts).
 
@@ -86,6 +113,7 @@ interface ParsedAccessoryRow {
   trackedName: string
   trackedPrice: number | null
   trackedCategory: string
+  trackedBrand: string
   sku: string
   trackedSku: string
 }
@@ -132,6 +160,7 @@ function parseAccessoryTabRows(rows: CellValue[][]): ParsedAccessoryRow[] {
       trackedName: cellRaw(r[COL_ACC.LAST_SYNCED_NAME]),
       trackedPrice: cellNum(r[COL_ACC.LAST_SYNCED_PRICE]),
       trackedCategory: cellRaw(r[COL_ACC.LAST_SYNCED_CATEGORY]),
+      trackedBrand: cellRaw(r[COL_ACC.LAST_SYNCED_MARCA]),
       sku: cellIdText(r[COL_ACC.SKU]),
       trackedSku: cellIdText(r[COL_ACC.LAST_SYNCED_SKU]),
     })
@@ -241,9 +270,10 @@ async function applyAccessoryPulls(
 function buildAccessoryTabContentValues(rows: AccessoryMasterRow[]): (string | number)[][] {
   return sortAccessoryRows(rows).map(it => {
     const categoryLabel = it.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla'
+    const brandLabel = it.brand || 'Sin marca'
     return [
-      categoryLabel, it.brand || 'Sin marca', it.sku ?? '', it.name, it.stock, it.precio ?? '',
-      it.accessoryId, it.name, it.precio ?? '', categoryLabel, it.sku ?? '',
+      categoryLabel, brandLabel, it.sku ?? '', it.name, it.stock, it.precio ?? '',
+      it.accessoryId, it.name, it.precio ?? '', categoryLabel, it.sku ?? '', brandLabel,
     ]
   })
 }
@@ -259,6 +289,22 @@ function buildAccessoryMergeRequestsForGroups(sheetId: number, rows: AccessoryMa
     rowCursor1 += group.items.length
     const endRow0 = rowCursor1 - 1
     if (endRow0 - startRow0 > 1) requests.push(buildAccessoryMergeRequest(sheetId, startRow0, endRow0))
+  })
+  return requests
+}
+
+// Igual que la de arriba pero para MARCA, anidada dentro de cada bloque de
+// categoría (nunca fusiona a través del límite Adhesivo/Boquilla).
+function buildAccessoryBrandMergeRequestsForGroups(sheetId: number, rows: AccessoryMasterRow[]): sheets_v4.Schema$Request[] {
+  const requests: sheets_v4.Schema$Request[] = []
+  let rowCursor1 = 2 // fila 1 = headers
+  groupConsecutiveByCategory(sortAccessoryRows(rows)).forEach(catGroup => {
+    groupConsecutiveByBrand(catGroup.items).forEach(brandGroup => {
+      const startRow0 = rowCursor1 - 1
+      rowCursor1 += brandGroup.items.length
+      const endRow0 = rowCursor1 - 1
+      if (endRow0 - startRow0 > 1) requests.push(buildAccessoryBrandMergeRequest(sheetId, startRow0, endRow0))
+    })
   })
   return requests
 }
@@ -298,7 +344,17 @@ async function reconcileAccessoryBodega(
     const label = fresh.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla'
     return row.trackedCategory !== label
   })
-  const structurallyDifferent = isNewTab || desiredIds.size !== actualIds.size || [...desiredIds].some(id => !actualIds.has(id)) || categoryChanged
+  // Mismo motivo que categoryChanged, pero para MARCA (también fusionada en
+  // bloques ahora) — si la marca de un accesorio cambió desde la app, la fila
+  // necesita moverse a otro bloque fusionado, y eso solo lo logra una
+  // reconstrucción completa.
+  const brandChanged = actualRows.some(row => {
+    const fresh = byIdFresh.get(row.accessoryId)
+    if (!fresh) return false
+    const label = fresh.brand || 'Sin marca'
+    return row.trackedBrand !== label
+  })
+  const structurallyDifferent = isNewTab || desiredIds.size !== actualIds.size || [...desiredIds].some(id => !actualIds.has(id)) || categoryChanged || brandChanged
 
   if (structurallyDifferent && !allowStructural) {
     return { bodega: config.bodega, rebuilt: false, cellsWritten: 0, needsReview: true }
@@ -326,7 +382,9 @@ async function reconcileAccessoryBodega(
   if (structurallyDifferent) {
     if (!isNewTab) toClear.push(ACCESSORY_TAB_NAME)
     structural.push(buildAccessoryUnmergeRequest(sheetId!))
+    structural.push(buildAccessoryBrandUnmergeRequest(sheetId!))
     structural.push(...buildAccessoryMergeRequestsForGroups(sheetId!, freshRows))
+    structural.push(...buildAccessoryBrandMergeRequestsForGroups(sheetId!, freshRows))
     const values = buildAccessoryTabContentValues(freshRows)
     if (values.length > 0) writes.push({ range: rowRangeAcc(ACCESSORY_TAB_NAME, 2, 1 + values.length), values })
     rebuilt = true
