@@ -12,8 +12,13 @@ export function groupByBrand<T extends { brand: string }>(items: T[]): Map<strin
   return byBrand
 }
 
-export function sortByFormatoThenName<T extends { area: number; name: string }>(items: T[]): T[] {
-  return [...items].sort((a, b) => a.area - b.area || a.name.localeCompare(b.name))
+// El desempate por formato (antes de nombre) es necesario porque dos medidas
+// distintas pueden compartir la misma área (ej. 20x90 y 30x60 dan 1800 cm²
+// ambas) — sin esto, sus productos se intercalarían por nombre y
+// groupConsecutiveByFormato los partiría en varios grupitos separados en vez
+// de uno solo por formato.
+export function sortByFormatoThenName<T extends { area: number; formato: string; name: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.area - b.area || a.formato.localeCompare(b.formato) || a.name.localeCompare(b.name))
 }
 
 export interface FormatoGroup<T> {
