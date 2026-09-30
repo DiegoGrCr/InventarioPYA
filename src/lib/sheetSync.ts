@@ -276,11 +276,18 @@ async function pullPhase(
           // Un valor inválido (texto donde va un número, o negativo) NUNCA se
           // aplica a la BDD — se ignora esta fila para ese campo, y la Fase B
           // se encarga de corregir la celda de vuelta al valor real.
-          if (!row.stockInvalid && !row.piezasSueltasInvalid) {
+          const master = masterById.get(row.productId)
+          // PIEZAS SUELTAS solo participa en el cálculo de stock para pisos
+          // por pieza — para pisos por caja es un campo de control manual del
+          // personal que NO se sube a la BDD ni afecta nada de la app (ver
+          // stockToBoxesAndPieces/buildTabContentValues), así que un valor
+          // inválido ahí nunca debe bloquear la actualización de CAJAS de un
+          // piso por caja.
+          const isPieza = master?.saleUnit === 'pieza'
+          if (!row.stockInvalid && (!isPieza || !row.piezasSueltasInvalid)) {
             // Para pisos por pieza, las celdas muestran/reciben CAJAS EN
             // EXISTENCIA + PIEZAS SUELTAS — se reconstruye el total real de
             // piezas (que es como se maneja el stock en toda la app).
-            const master = masterById.get(row.productId)
             const stockInPieces = master ? boxesAndPiecesToStock(row.stock, row.piezasSueltas, master.saleUnit, master.piezas) : row.stock
             stockPushes.push({ productId: row.productId, bodega: config.bodega, stock: stockInPieces })
           }
@@ -379,11 +386,18 @@ async function applyPulls(
 
 // -------- Fase B: reconciliar cada pestaña contra los datos ya actualizados --------
 
-function buildTabContentValues(rows: MasterRow[]): (string | number)[][] {
+// preservedLoosePieces: valores de PIEZAS SUELTAS que el personal ya tenía
+// capturados a mano en pisos por CAJA (donde la columna no es más que control
+// manual — ver el comentario en pullPhase). Una reconstrucción completa de la
+// pestaña (ej. se agregó otro producto a la misma marca) borra y reescribe
+// toda la fila, así que sin esto esos valores se perderían igual que se
+// perdían antes en cada sync incremental.
+function buildTabContentValues(rows: MasterRow[], preservedLoosePieces: Map<string, number>): (string | number)[][] {
   return sortByFormatoThenName(rows).map(it => {
     const { cajas, piezasSueltas } = stockToBoxesAndPieces(it)
+    const piezasSueltasOut = it.saleUnit === 'pieza' ? piezasSueltas : (preservedLoosePieces.get(it.productId) || '')
     return [
-      it.formato, it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', cajas, piezasSueltas, it.precio ?? '',
+      it.formato, it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', cajas, piezasSueltasOut, it.precio ?? '',
       it.productId, it.name, it.precio ?? '', it.sku ?? '', it.piezas ?? '', it.m2 ?? '',
     ]
   })
@@ -493,7 +507,8 @@ async function reconcileBodega(
       if (!isNewTab) toClear.push(title)
       structural.push(buildUnmergeRequest(sheetId))
       structural.push(...buildMergeRequestsForGroups(sheetId, desired))
-      const values = buildTabContentValues(desired)
+      const preservedLoosePieces = new Map(actualRows.map(r => [r.productId, r.piezasSueltas]))
+      const values = buildTabContentValues(desired, preservedLoosePieces)
       if (values.length > 0) writes.push({ range: rowRange(title, 2, 1 + values.length), values })
       rebuiltTabs.push(title)
     } else {
@@ -527,7 +542,10 @@ async function reconcileBodega(
         if (row.stock !== authoritativeCajas) {
           writes.push({ range: cellRange(title, COL.CAJAS_EN_EXISTENCIA, row.rowIndex1), values: [[authoritativeCajas]] })
         }
-        if (row.piezasSueltas !== (authoritativePiezasSueltas === '' ? 0 : authoritativePiezasSueltas)) {
+        // Para pisos por CAJA, PIEZAS SUELTAS es control manual del personal
+        // (ver pullPhase) — el sync nunca la compara ni la sobreescribe, así
+        // se queda tal cual la dejaron aunque pase la actualización automática.
+        if (authoritative.saleUnit === 'pieza' && row.piezasSueltas !== (authoritativePiezasSueltas === '' ? 0 : authoritativePiezasSueltas)) {
           writes.push({ range: cellRange(title, COL.PIEZAS_SUELTAS, row.rowIndex1), values: [[authoritativePiezasSueltas]] })
         }
         if (row.sku !== (authoritative.sku ?? '')) {
