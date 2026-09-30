@@ -16,16 +16,21 @@ export const COL = {
   // por caja esta columna siempre queda en blanco/sin uso.
   PIEZAS_SUELTAS: 6,
   PRECIO: 7,
-  PRODUCT_ID: 8,
-  LAST_SYNCED_NAME: 9,
-  LAST_SYNCED_PRICE: 10,
-  LAST_SYNCED_SKU: 11,
-  LAST_SYNCED_PIEZAS: 12,
-  LAST_SYNCED_M2: 13,
+  // Control 100% manual del encargado de inventarios — el sync NUNCA la lee
+  // ni la escribe (ver pullPhase/buildTabContentValues en sheetSync.ts), solo
+  // existe para que el personal anote a mano la fecha del último chequeo
+  // físico. Por eso no tiene columna _last_synced_* propia.
+  FECHA_ACTUALIZACION: 8,
+  PRODUCT_ID: 9,
+  LAST_SYNCED_NAME: 10,
+  LAST_SYNCED_PRICE: 11,
+  LAST_SYNCED_SKU: 12,
+  LAST_SYNCED_PIEZAS: 13,
+  LAST_SYNCED_M2: 14,
 } as const
 
 export const HEADERS = [
-  'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PIEZAS SUELTAS', 'PRECIO',
+  'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PIEZAS SUELTAS', 'PRECIO', 'FECHA ACTUALIZACIÓN',
   '_product_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku', '_last_synced_piezas', '_last_synced_m2',
 ]
 
@@ -246,7 +251,7 @@ export function buildProtectionRequests(sheetId: number, serviceAccountEmail: st
       // Fila de encabezados completa (incl. DESCRIPCIÓN/CAJAS EN EXISTENCIA,
       // que sí quedan editables en las filas de datos) — el personal solo
       // debería poder escribir sus valores, no renombrar las columnas.
-      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL.FORMATO, endColumnIndex: COL.PRECIO + 1 },
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL.FORMATO, endColumnIndex: COL.FECHA_ACTUALIZACION + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
   )
@@ -257,6 +262,10 @@ export function buildProtectionRequests(sheetId: number, serviceAccountEmail: st
   // renombre o mueva la pestaña. unprotectedRanges dentro de esta misma
   // protección deja libres exactamente las mismas celdas de siempre.
   const editableEndRow = 1 + rowCount
+  // FECHA_ACTUALIZACION queda libre SIEMPRE, en las 2 ramas — es control
+  // manual del encargado de inventarios sin importar el nivel de edición de
+  // la bodega (igual que DESCRIPCIÓN/CAJAS EN EXISTENCIA).
+  const fechaActualizacionRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.FECHA_ACTUALIZACION, endColumnIndex: COL.FECHA_ACTUALIZACION + 1 }
   const unprotectedRanges = fullyEditable
     ? [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.SKU, endColumnIndex: COL.SKU + 1 },
@@ -264,10 +273,12 @@ export function buildProtectionRequests(sheetId: number, serviceAccountEmail: st
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.PIEZAS_X_CAJA, endColumnIndex: COL.M2_X_CAJA + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.PIEZAS_SUELTAS + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.PRECIO, endColumnIndex: COL.PRECIO + 1 },
+        fechaActualizacionRange,
       ]
     : [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.DESCRIPCION, endColumnIndex: COL.DESCRIPCION + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL.CAJAS_EN_EXISTENCIA, endColumnIndex: COL.PIEZAS_SUELTAS + 1 },
+        fechaActualizacionRange,
       ]
 
   requests.push({ addProtectedRange: { protectedRange: {
@@ -344,7 +355,7 @@ function hexToRgb(hex: string) {
   }
 }
 
-const VISIBLE_COLS = { startColumnIndex: COL.FORMATO, endColumnIndex: COL.PRECIO + 1 }
+const VISIBLE_COLS = { startColumnIndex: COL.FORMATO, endColumnIndex: COL.FECHA_ACTUALIZACION + 1 }
 const STYLE_LAST_ROW = 1000 // suficiente margen sobre el tamaño real de cualquier marca
 
 // Encabezado en negrita con fondo de color — idempotente, se puede reaplicar cada corrida.
@@ -414,6 +425,13 @@ export function buildNumberFormatRequests(sheetId: number): sheets_v4.Schema$Req
       fields: 'userEnteredFormat.numberFormat',
     } },
     { repeatCell: {
+      // Solo cosmético (facilita capturar con el selector de fecha de Sheets)
+      // — el sync nunca escribe ni valida esta columna, ver el comentario en COL.
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL.FECHA_ACTUALIZACION, endColumnIndex: COL.FECHA_ACTUALIZACION + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL.FORMATO, endColumnIndex: COL.SKU + 1 },
       cell: { userEnteredFormat: { horizontalAlignment: 'CENTER' } },
       fields: 'userEnteredFormat.horizontalAlignment',
@@ -440,6 +458,7 @@ export function buildColumnWidthRequests(sheetId: number): sheets_v4.Schema$Requ
   const widths: [number, number][] = [
     [COL.FORMATO, 80], [COL.SKU, 110], [COL.DESCRIPCION, 240], [COL.PIEZAS_X_CAJA, 100],
     [COL.M2_X_CAJA, 90], [COL.CAJAS_EN_EXISTENCIA, 130], [COL.PIEZAS_SUELTAS, 120], [COL.PRECIO, 100],
+    [COL.FECHA_ACTUALIZACION, 140],
   ]
   return widths.map(([index, pixelSize]) => ({
     updateDimensionProperties: {
@@ -460,7 +479,7 @@ export function buildColumnWidthRequests(sheetId: number): sheets_v4.Schema$Requ
 // otras filas del mismo formato sí tienen stock, la celda fusionada del
 // formato se veía roja igual, dando a entender que TODO el formato estaba
 // agotado cuando solo era una fila.
-const ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL.SKU, endColumnIndex: COL.PRECIO + 1 }
+const ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL.SKU, endColumnIndex: COL.FECHA_ACTUALIZACION + 1 }
 
 export function buildZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
   return { addConditionalFormatRule: {
@@ -528,23 +547,26 @@ export const COL_ACC = {
   DESCRIPCION: 3,
   CANTIDAD: 4,
   PRECIO: 5,
-  ACCESSORY_ID: 6,
-  LAST_SYNCED_NAME: 7,
-  LAST_SYNCED_PRICE: 8,
+  // Control 100% manual del encargado de inventarios — ver el mismo campo en
+  // COL de Pisos.
+  FECHA_ACTUALIZACION: 6,
+  ACCESSORY_ID: 7,
+  LAST_SYNCED_NAME: 8,
+  LAST_SYNCED_PRICE: 9,
   // Solo para detectar que la categoría de un accesorio cambió desde la app
   // (CATEGORÍA está protegida/fusionada, no se lee de vuelta como cambio de
   // staff) — dispara una reconstrucción completa para que la fila se mueva
   // al bloque fusionado correcto.
-  LAST_SYNCED_CATEGORY: 9,
-  LAST_SYNCED_SKU: 10,
+  LAST_SYNCED_CATEGORY: 10,
+  LAST_SYNCED_SKU: 11,
   // Mismo motivo que LAST_SYNCED_CATEGORY, pero para MARCA — también quedó
   // fusionada en bloques (ver buildAccessoryBrandMergeRequest), así que un
   // cambio de marca también necesita disparar reconstrucción completa.
-  LAST_SYNCED_MARCA: 11,
+  LAST_SYNCED_MARCA: 12,
 } as const
 
 export const HEADERS_ACC = [
-  'CATEGORÍA', 'MARCA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO',
+  'CATEGORÍA', 'MARCA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO', 'FECHA ACTUALIZACIÓN',
   '_accessory_id', '_last_synced_name', '_last_synced_price', '_last_synced_category', '_last_synced_sku', '_last_synced_marca',
 ]
 
@@ -556,7 +578,7 @@ export function rowRangeAcc(title: string, startRow1: number, endRow1: number): 
   return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_ACC.LAST_SYNCED_MARCA)}${endRow1}`
 }
 
-const VISIBLE_COLS_ACC = { startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.PRECIO + 1 }
+const VISIBLE_COLS_ACC = { startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.FECHA_ACTUALIZACION + 1 }
 
 // Protege CATEGORÍA/SKU/DESCRIPCIÓN y PRECIO — solo CANTIDAD queda libre
 // para el personal. fullyEditable (La Playita, ver isFullyEditableBodega en
@@ -592,18 +614,23 @@ export function buildAccessoryProtectionRequests(sheetId: number, serviceAccount
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.PRECIO + 1 },
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_ACC.CATEGORIA, endColumnIndex: COL_ACC.FECHA_ACTUALIZACION + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
   )
 
   const editableEndRow = 1 + rowCount
+  // FECHA_ACTUALIZACION queda libre SIEMPRE — ver el mismo campo en
+  // buildProtectionRequests (Pisos).
+  const fechaActualizacionRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_ACC.FECHA_ACTUALIZACION, endColumnIndex: COL_ACC.FECHA_ACTUALIZACION + 1 }
   const unprotectedRanges = fullyEditable
     ? [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 },
+        fechaActualizacionRange,
       ]
     : [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_ACC.CANTIDAD, endColumnIndex: COL_ACC.CANTIDAD + 1 },
+        fechaActualizacionRange,
       ]
 
   // Protección de la PESTAÑA completa — ver el equivalente de Pisos
@@ -670,7 +697,7 @@ export function buildAccessoryZeroStockHighlightRequest(sheetId: number): sheets
       // pintar de forma sensata ahí: si UNA fila del bloque tiene stock en 0,
       // pintaría el bloque entero de rojo aunque el resto sí tenga stock.
       // SKU sí es una celda normal por fila (no fusionada).
-      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 }],
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.FECHA_ACTUALIZACION + 1 }],
       booleanRule: {
         condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"",$${colLetter(COL_ACC.CANTIDAD)}2=0)` }] },
         format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
@@ -683,7 +710,7 @@ export function buildAccessoryZeroStockHighlightRequest(sheetId: number): sheets
 export function buildAccessoryLowStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
   return { addConditionalFormatRule: {
     rule: {
-      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.PRECIO + 1 }],
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, startColumnIndex: COL_ACC.SKU, endColumnIndex: COL_ACC.FECHA_ACTUALIZACION + 1 }],
       booleanRule: {
         condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_ACC.ACCESSORY_ID)}2<>"",$${colLetter(COL_ACC.CANTIDAD)}2>0,$${colLetter(COL_ACC.CANTIDAD)}2<=${LOW_STOCK_THRESHOLD})` }] },
         format: { backgroundColor: hexToRgb(COLORS.lowBg) },
@@ -718,6 +745,11 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
       // de cuando esta columna física solía ser PRECIO (antes de insertar SKU).
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.CANTIDAD, endColumnIndex: COL_ACC.CANTIDAD + 1 },
       cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_ACC.FECHA_ACTUALIZACION, endColumnIndex: COL_ACC.FECHA_ACTUALIZACION + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
       fields: 'userEnteredFormat.numberFormat',
     } },
     { repeatCell: {
@@ -769,6 +801,11 @@ export function buildAccessoryRepeatableStyleRequests(sheetId: number): sheets_v
       properties: { pixelSize: 100 },
       fields: 'pixelSize',
     } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_ACC.FECHA_ACTUALIZACION, endIndex: COL_ACC.FECHA_ACTUALIZACION + 1 },
+      properties: { pixelSize: 140 },
+      fields: 'pixelSize',
+    } },
   ]
 }
 
@@ -788,16 +825,20 @@ export const COL_MESH = {
   M2_X_CAJA: 6,
   CAJAS_EN_EXISTENCIA: 7,
   PRECIO: 8,
-  MESH_ID: 9,
-  LAST_SYNCED_NAME: 10,
-  LAST_SYNCED_PRICE: 11,
-  LAST_SYNCED_SKU: 12,
-  LAST_SYNCED_PIEZAS: 13,
-  LAST_SYNCED_M2: 14,
+  // Control 100% manual del encargado de inventarios — el sync NUNCA la lee
+  // ni la escribe, solo existe para anotar a mano la fecha del último
+  // chequeo físico (ver el mismo campo en COL de Pisos).
+  FECHA_ACTUALIZACION: 9,
+  MESH_ID: 10,
+  LAST_SYNCED_NAME: 11,
+  LAST_SYNCED_PRICE: 12,
+  LAST_SYNCED_SKU: 13,
+  LAST_SYNCED_PIEZAS: 14,
+  LAST_SYNCED_M2: 15,
 } as const
 
 export const HEADERS_MESH = [
-  'FOTO', 'MARCA', 'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
+  'FOTO', 'MARCA', 'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO', 'FECHA ACTUALIZACIÓN',
   '_mesh_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku', '_last_synced_piezas', '_last_synced_m2',
 ]
 
@@ -809,11 +850,11 @@ export function rowRangeMesh(title: string, startRow1: number, endRow1: number):
   return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_MESH.LAST_SYNCED_M2)}${endRow1}`
 }
 
-const VISIBLE_COLS_MESH = { startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.PRECIO + 1 }
+const VISIBLE_COLS_MESH = { startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.FECHA_ACTUALIZACION + 1 }
 // Rango solo para el resaltado de stock 0 — arranca en MARCA (no en FOTO) para
 // no pintar la celda de la foto de rojo, ver el mismo criterio aplicado en
 // Pisos (ZERO_STOCK_HIGHLIGHT_COLS) para columnas que no deben entrar ahí.
-const MESH_ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.PRECIO + 1 }
+const MESH_ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL_MESH.MARCA, endColumnIndex: COL_MESH.FECHA_ACTUALIZACION + 1 }
 
 // Protege FOTO+MARCA+FORMATO+SKU, PIEZAS/M2, PRECIO, la fila de encabezados y
 // las columnas ocultas — solo DESCRIPCIÓN/CAJAS EN EXISTENCIA quedan libres
@@ -854,12 +895,15 @@ export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.PRECIO + 1 },
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_MESH.FOTO, endColumnIndex: COL_MESH.FECHA_ACTUALIZACION + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
   )
 
   const editableEndRow = 1 + rowCount
+  // FECHA_ACTUALIZACION queda libre SIEMPRE — ver el mismo campo en
+  // buildProtectionRequests (Pisos).
+  const fechaActualizacionRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.FECHA_ACTUALIZACION, endColumnIndex: COL_MESH.FECHA_ACTUALIZACION + 1 }
   const unprotectedRanges = fullyEditable
     ? [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.SKU, endColumnIndex: COL_MESH.SKU + 1 },
@@ -867,10 +911,12 @@ export function buildMeshProtectionRequests(sheetId: number, serviceAccountEmail
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.PIEZAS_X_CAJA, endColumnIndex: COL_MESH.M2_X_CAJA + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.PRECIO, endColumnIndex: COL_MESH.PRECIO + 1 },
+        fechaActualizacionRange,
       ]
     : [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.DESCRIPCION, endColumnIndex: COL_MESH.DESCRIPCION + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_MESH.CAJAS_EN_EXISTENCIA + 1 },
+        fechaActualizacionRange,
       ]
 
   // Protección de la PESTAÑA completa — ver el equivalente de Pisos
@@ -931,7 +977,7 @@ export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Sch
   const widths: [number, number][] = [
     [COL_MESH.FOTO, 114], [COL_MESH.MARCA, 110], [COL_MESH.FORMATO, 80], [COL_MESH.SKU, 110], [COL_MESH.DESCRIPCION, 220],
     [COL_MESH.PIEZAS_X_CAJA, 100], [COL_MESH.M2_X_CAJA, 90], [COL_MESH.CAJAS_EN_EXISTENCIA, 150],
-    [COL_MESH.PRECIO, 100],
+    [COL_MESH.PRECIO, 100], [COL_MESH.FECHA_ACTUALIZACION, 140],
   ]
   return [
     // Filas más altas para que la foto (IMAGE con alto fijo de 100px) se vea
@@ -978,6 +1024,11 @@ export function buildMeshRepeatableStyleRequests(sheetId: number): sheets_v4.Sch
       cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '"$"#,##0.##' } } },
       fields: 'userEnteredFormat.numberFormat',
     } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_MESH.FECHA_ACTUALIZACION, endColumnIndex: COL_MESH.FECHA_ACTUALIZACION + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
     { updateBorders: {
       range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_MESH },
       top: style, bottom: style, left: style, right: style, innerHorizontal: style, innerVertical: style,
@@ -1006,16 +1057,19 @@ export const COL_CENEFA = {
   M2_X_CAJA: 5,
   CAJAS_EN_EXISTENCIA: 6,
   PRECIO: 7,
-  CENEFA_ID: 8,
-  LAST_SYNCED_NAME: 9,
-  LAST_SYNCED_PRICE: 10,
-  LAST_SYNCED_SKU: 11,
-  LAST_SYNCED_PIEZAS: 12,
-  LAST_SYNCED_M2: 13,
+  // Control 100% manual del encargado de inventarios — ver el mismo campo en
+  // COL de Pisos.
+  FECHA_ACTUALIZACION: 8,
+  CENEFA_ID: 9,
+  LAST_SYNCED_NAME: 10,
+  LAST_SYNCED_PRICE: 11,
+  LAST_SYNCED_SKU: 12,
+  LAST_SYNCED_PIEZAS: 13,
+  LAST_SYNCED_M2: 14,
 } as const
 
 export const HEADERS_CENEFA = [
-  'MARCA', 'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO',
+  'MARCA', 'FORMATO', 'SKU', 'DESCRIPCIÓN', 'PIEZAS X CAJA', 'M² X CAJA', 'CAJAS EN EXISTENCIA', 'PRECIO', 'FECHA ACTUALIZACIÓN',
   '_cenefa_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku', '_last_synced_piezas', '_last_synced_m2',
 ]
 
@@ -1025,7 +1079,7 @@ export function rowRangeCenefa(title: string, startRow1: number, endRow1: number
   return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_CENEFA.LAST_SYNCED_M2)}${endRow1}`
 }
 
-const VISIBLE_COLS_CENEFA = { startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.PRECIO + 1 }
+const VISIBLE_COLS_CENEFA = { startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.FECHA_ACTUALIZACION + 1 }
 
 // Protege MARCA+FORMATO+SKU, PIEZAS/M2, PRECIO, la fila de encabezados y las
 // columnas ocultas — solo DESCRIPCIÓN/CAJAS EN EXISTENCIA quedan libres para
@@ -1065,12 +1119,15 @@ export function buildCenefaProtectionRequests(sheetId: number, serviceAccountEma
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.PRECIO + 1 },
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_CENEFA.MARCA, endColumnIndex: COL_CENEFA.FECHA_ACTUALIZACION + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
   )
 
   const editableEndRow = 1 + rowCount
+  // FECHA_ACTUALIZACION queda libre SIEMPRE — ver el mismo campo en
+  // buildProtectionRequests (Pisos).
+  const fechaActualizacionRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.FECHA_ACTUALIZACION, endColumnIndex: COL_CENEFA.FECHA_ACTUALIZACION + 1 }
   const unprotectedRanges = fullyEditable
     ? [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.SKU, endColumnIndex: COL_CENEFA.SKU + 1 },
@@ -1078,10 +1135,12 @@ export function buildCenefaProtectionRequests(sheetId: number, serviceAccountEma
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.PIEZAS_X_CAJA, endColumnIndex: COL_CENEFA.M2_X_CAJA + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.PRECIO, endColumnIndex: COL_CENEFA.PRECIO + 1 },
+        fechaActualizacionRange,
       ]
     : [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.DESCRIPCION, endColumnIndex: COL_CENEFA.DESCRIPCION + 1 },
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA, endColumnIndex: COL_CENEFA.CAJAS_EN_EXISTENCIA + 1 },
+        fechaActualizacionRange,
       ]
 
   // Protección de la PESTAÑA completa — ver el equivalente de Pisos
@@ -1142,7 +1201,7 @@ export function buildCenefaRepeatableStyleRequests(sheetId: number): sheets_v4.S
   const widths: [number, number][] = [
     [COL_CENEFA.MARCA, 110], [COL_CENEFA.FORMATO, 80], [COL_CENEFA.SKU, 110], [COL_CENEFA.DESCRIPCION, 220],
     [COL_CENEFA.PIEZAS_X_CAJA, 100], [COL_CENEFA.M2_X_CAJA, 90], [COL_CENEFA.CAJAS_EN_EXISTENCIA, 150],
-    [COL_CENEFA.PRECIO, 100],
+    [COL_CENEFA.PRECIO, 100], [COL_CENEFA.FECHA_ACTUALIZACION, 140],
   ]
   return [
     { repeatCell: {
@@ -1175,6 +1234,11 @@ export function buildCenefaRepeatableStyleRequests(sheetId: number): sheets_v4.S
     { repeatCell: {
       range: { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.PRECIO, endColumnIndex: COL_CENEFA.PRECIO + 1 },
       cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '"$"#,##0.##' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_CENEFA.FECHA_ACTUALIZACION, endColumnIndex: COL_CENEFA.FECHA_ACTUALIZACION + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
       fields: 'userEnteredFormat.numberFormat',
     } },
     { updateBorders: {

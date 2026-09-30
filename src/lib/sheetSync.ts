@@ -143,6 +143,11 @@ interface ParsedSheetRow {
   // igual que CAJAS EN EXISTENCIA: siempre se toma tal cual esté en la celda.
   piezasSueltas: number
   piezasSueltasInvalid: boolean
+  // Control 100% manual del encargado de inventarios (fecha del último
+  // chequeo físico) — se lee solo para poder PRESERVARLA en una
+  // reconstrucción completa (ver buildTabContentValues); el sync nunca la
+  // valida ni la compara/escribe.
+  fechaActualizacion: string
 }
 
 // Con UNFORMATTED_VALUE, Sheets ya regresa números como number (no string), pero
@@ -217,6 +222,7 @@ function parseTabRows(rows: CellValue[][]): ParsedSheetRow[] {
       trackedM2: cellNum(r[COL.LAST_SYNCED_M2]),
       piezasSueltas: piezasSueltasInvalid ? 0 : (piezasSueltasNum ?? 0),
       piezasSueltasInvalid,
+      fechaActualizacion: cellRaw(r[COL.FECHA_ACTUALIZACION]),
     })
   }
   return out
@@ -392,12 +398,12 @@ async function applyPulls(
 // pestaña (ej. se agregó otro producto a la misma marca) borra y reescribe
 // toda la fila, así que sin esto esos valores se perderían igual que se
 // perdían antes en cada sync incremental.
-function buildTabContentValues(rows: MasterRow[], preservedLoosePieces: Map<string, number>): (string | number)[][] {
+function buildTabContentValues(rows: MasterRow[], preservedLoosePieces: Map<string, number>, preservedFechas: Map<string, string>): (string | number)[][] {
   return sortByFormatoThenName(rows).map(it => {
     const { cajas, piezasSueltas } = stockToBoxesAndPieces(it)
     const piezasSueltasOut = it.saleUnit === 'pieza' ? piezasSueltas : (preservedLoosePieces.get(it.productId) || '')
     return [
-      it.formato, it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', cajas, piezasSueltasOut, it.precio ?? '',
+      it.formato, it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', cajas, piezasSueltasOut, it.precio ?? '', preservedFechas.get(it.productId) || '',
       it.productId, it.name, it.precio ?? '', it.sku ?? '', it.piezas ?? '', it.m2 ?? '',
     ]
   })
@@ -508,7 +514,8 @@ async function reconcileBodega(
       structural.push(buildUnmergeRequest(sheetId))
       structural.push(...buildMergeRequestsForGroups(sheetId, desired))
       const preservedLoosePieces = new Map(actualRows.map(r => [r.productId, r.piezasSueltas]))
-      const values = buildTabContentValues(desired, preservedLoosePieces)
+      const preservedFechas = new Map(actualRows.map(r => [r.productId, r.fechaActualizacion]))
+      const values = buildTabContentValues(desired, preservedLoosePieces, preservedFechas)
       if (values.length > 0) writes.push({ range: rowRange(title, 2, 1 + values.length), values })
       rebuiltTabs.push(title)
     } else {

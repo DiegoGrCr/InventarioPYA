@@ -81,6 +81,10 @@ interface ParsedCenefaRow {
   m2: number | null
   m2Invalid: boolean
   trackedM2: number | null
+  // Control 100% manual del encargado de inventarios — ver el mismo campo
+  // en sheetSync.ts (Pisos). Solo se lee para preservarla en una
+  // reconstrucción completa, el sync nunca la compara ni la escribe.
+  fechaActualizacion: string
 }
 
 function cellRaw(v: CellValue | undefined): string {
@@ -140,6 +144,7 @@ function parseCenefaTabRows(rows: CellValue[][]): ParsedCenefaRow[] {
       m2: m2Num,
       m2Invalid,
       trackedM2: cellNum(r[COL_CENEFA.LAST_SYNCED_M2]),
+      fechaActualizacion: cellRaw(r[COL_CENEFA.FECHA_ACTUALIZACION]),
     })
   }
   return out
@@ -271,9 +276,9 @@ async function applyCenefaPulls(
 
 // -------- Fase B: reconciliar la pestaña contra los datos ya actualizados --------
 
-function buildCenefaTabContentValues(rows: CenefaMasterRow[]): (string | number)[][] {
+function buildCenefaTabContentValues(rows: CenefaMasterRow[], preservedFechas: Map<string, string>): (string | number)[][] {
   return sortCenefaRows(rows).map(it => [
-    it.brand || 'Sin marca', it.formato || '', it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
+    it.brand || 'Sin marca', it.formato || '', it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '', preservedFechas.get(it.cenefaId) || '',
     it.cenefaId, it.name, it.precio ?? '', it.sku ?? '', it.piezas ?? '', it.m2 ?? '',
   ])
 }
@@ -329,7 +334,8 @@ async function reconcileCenefaBodega(
 
   if (structurallyDifferent) {
     if (!isNewTab) toClear.push(CENEFA_TAB_NAME)
-    const values = buildCenefaTabContentValues(freshRows)
+    const preservedFechas = new Map(actualRows.map(r => [r.cenefaId, r.fechaActualizacion]))
+    const values = buildCenefaTabContentValues(freshRows, preservedFechas)
     if (values.length > 0) writes.push({ range: rowRangeCenefa(CENEFA_TAB_NAME, 2, 1 + values.length), values })
     rebuilt = true
   } else {

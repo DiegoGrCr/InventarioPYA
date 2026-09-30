@@ -116,6 +116,10 @@ interface ParsedAccessoryRow {
   trackedBrand: string
   sku: string
   trackedSku: string
+  // Control 100% manual del encargado de inventarios — ver el mismo campo
+  // en sheetSync.ts (Pisos). Solo se lee para preservarla en una
+  // reconstrucción completa, el sync nunca la compara ni la escribe.
+  fechaActualizacion: string
 }
 
 function cellRaw(v: CellValue | undefined): string {
@@ -163,6 +167,7 @@ function parseAccessoryTabRows(rows: CellValue[][]): ParsedAccessoryRow[] {
       trackedBrand: cellRaw(r[COL_ACC.LAST_SYNCED_MARCA]),
       sku: cellIdText(r[COL_ACC.SKU]),
       trackedSku: cellIdText(r[COL_ACC.LAST_SYNCED_SKU]),
+      fechaActualizacion: cellRaw(r[COL_ACC.FECHA_ACTUALIZACION]),
     })
   }
   return out
@@ -267,12 +272,12 @@ async function applyAccessoryPulls(
 
 // -------- Fase B: reconciliar la pestaña contra los datos ya actualizados --------
 
-function buildAccessoryTabContentValues(rows: AccessoryMasterRow[]): (string | number)[][] {
+function buildAccessoryTabContentValues(rows: AccessoryMasterRow[], preservedFechas: Map<string, string>): (string | number)[][] {
   return sortAccessoryRows(rows).map(it => {
     const categoryLabel = it.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla'
     const brandLabel = it.brand || 'Sin marca'
     return [
-      categoryLabel, brandLabel, it.sku ?? '', it.name, it.stock, it.precio ?? '',
+      categoryLabel, brandLabel, it.sku ?? '', it.name, it.stock, it.precio ?? '', preservedFechas.get(it.accessoryId) || '',
       it.accessoryId, it.name, it.precio ?? '', categoryLabel, it.sku ?? '', brandLabel,
     ]
   })
@@ -385,7 +390,8 @@ async function reconcileAccessoryBodega(
     structural.push(buildAccessoryBrandUnmergeRequest(sheetId!))
     structural.push(...buildAccessoryMergeRequestsForGroups(sheetId!, freshRows))
     structural.push(...buildAccessoryBrandMergeRequestsForGroups(sheetId!, freshRows))
-    const values = buildAccessoryTabContentValues(freshRows)
+    const preservedFechas = new Map(actualRows.map(r => [r.accessoryId, r.fechaActualizacion]))
+    const values = buildAccessoryTabContentValues(freshRows, preservedFechas)
     if (values.length > 0) writes.push({ range: rowRangeAcc(ACCESSORY_TAB_NAME, 2, 1 + values.length), values })
     rebuilt = true
   } else {

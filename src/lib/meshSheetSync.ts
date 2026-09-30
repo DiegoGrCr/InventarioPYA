@@ -88,6 +88,10 @@ interface ParsedMeshRow {
   m2: number | null
   m2Invalid: boolean
   trackedM2: number | null
+  // Control 100% manual del encargado de inventarios — ver el mismo campo
+  // en sheetSync.ts (Pisos). Solo se lee para preservarla en una
+  // reconstrucción completa, el sync nunca la compara ni la escribe.
+  fechaActualizacion: string
 }
 
 function cellRaw(v: CellValue | undefined): string {
@@ -147,6 +151,7 @@ function parseMeshTabRows(rows: CellValue[][]): ParsedMeshRow[] {
       m2: m2Num,
       m2Invalid,
       trackedM2: cellNum(r[COL_MESH.LAST_SYNCED_M2]),
+      fechaActualizacion: cellRaw(r[COL_MESH.FECHA_ACTUALIZACION]),
     })
   }
   return out
@@ -278,13 +283,13 @@ async function applyMeshPulls(
 
 // -------- Fase B: reconciliar la pestaña contra los datos ya actualizados --------
 
-function buildMeshTabContentValues(rows: MeshMasterRow[]): (string | number)[][] {
+function buildMeshTabContentValues(rows: MeshMasterRow[], preservedFechas: Map<string, string>): (string | number)[][] {
   // FOTO (col 0) va en blanco aquí a propósito: este arreglo se escribe con
   // RAW (ver batchWriteCells), que guardaría la fórmula =IMAGE(...) como
   // texto literal en vez de evaluarla. Se llena aparte con
   // buildMeshFotoValues() en una llamada separada con USER_ENTERED.
   return sortMeshRows(rows).map(it => [
-    '', it.brand || 'Sin marca', it.formato || '', it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '',
+    '', it.brand || 'Sin marca', it.formato || '', it.sku ?? '', it.name, it.piezas ?? '', it.m2 ?? '', it.stock, it.precio ?? '', preservedFechas.get(it.meshId) || '',
     it.meshId, it.name, it.precio ?? '', it.sku ?? '', it.piezas ?? '', it.m2 ?? '',
   ])
 }
@@ -349,7 +354,8 @@ async function reconcileMeshBodega(
 
   if (structurallyDifferent) {
     if (!isNewTab) toClear.push(MESH_TAB_NAME)
-    const values = buildMeshTabContentValues(freshRows)
+    const preservedFechas = new Map(actualRows.map(r => [r.meshId, r.fechaActualizacion]))
+    const values = buildMeshTabContentValues(freshRows, preservedFechas)
     if (values.length > 0) {
       writes.push({ range: rowRangeMesh(MESH_TAB_NAME, 2, 1 + values.length), values })
       fotoWrites.push({ range: colRange(MESH_TAB_NAME, COL_MESH.FOTO, 2, 1 + values.length), values: buildMeshFotoValues(freshRows) })
