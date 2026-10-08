@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatPrice, likeSafe } from '@/lib/utils'
-import { Layers, Toilet, Package, Search } from 'lucide-react'
+import { Layers, Toilet, Package, Search, Grid3x3, Rows3 } from 'lucide-react'
 
 export default async function BuscarPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q } = await searchParams
@@ -20,7 +20,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
         <div className="empty-state">
           <div className="empty-state-icon"><Search size={48} strokeWidth={1} /></div>
           <h3>¿Qué estás buscando?</h3>
-          <p>Usa el buscador de arriba para encontrar pisos, baños o adhesivos</p>
+          <p>Usa el buscador de arriba para encontrar pisos, mallas, cenefas, baños o adhesivos</p>
         </div>
       </div>
     )
@@ -40,8 +40,18 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
   const sizeIds = (matchingSizes || []).map((s) => s.id)
   const sizeFilter = sizeIds.length > 0 ? `,size_id.in.(${sizeIds.join(',')})` : ''
 
-  const [pisosRes, banosRes, compRes] = await Promise.all([
+  const [pisosRes, mallasRes, cenefasRes, banosRes, compRes] = await Promise.all([
     supabase.from('products')
+      .select('id, name, image_url, price_per_sqm, stock, brand:brands(name), size:sizes(label)')
+      .eq('is_active', true)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},color.ilike.${likeOr},finish.ilike.${likeOr}${sizeFilter}`)
+      .limit(200),
+    supabase.from('meshes')
+      .select('id, name, image_url, price_per_sqm, stock, brand:brands(name), size:sizes(label)')
+      .eq('is_active', true)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},color.ilike.${likeOr},finish.ilike.${likeOr}${sizeFilter}`)
+      .limit(200),
+    supabase.from('cenefas')
       .select('id, name, image_url, price_per_sqm, stock, brand:brands(name), size:sizes(label)')
       .eq('is_active', true)
       .or(`name.ilike.${likeOr},description.ilike.${likeOr},color.ilike.${likeOr},finish.ilike.${likeOr}${sizeFilter}`)
@@ -59,9 +69,11 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
   ])
 
   const pisos = pisosRes.data || []
+  const mallas = mallasRes.data || []
+  const cenefas = cenefasRes.data || []
   const banos = banosRes.data || []
   const complementos = compRes.data || []
-  const total = pisos.length + banos.length + complementos.length
+  const total = pisos.length + mallas.length + cenefas.length + banos.length + complementos.length
 
   return (
     <div className="fade-in">
@@ -106,6 +118,72 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
                       : '—'}
                   </span>
                   <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Stock: {p.stock}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {mallas.length > 0 && (
+        <section style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <Grid3x3 size={18} />
+            <h2 style={{ fontSize: '16px', fontWeight: 700 }}>Mallas ({mallas.length})</h2>
+          </div>
+          <div className="product-grid">
+            {mallas.map((m) => (
+              <Link key={m.id} href={`/mallas/${m.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
+                <div className="card-image-wrapper">
+                  {m.image_url
+                    ? <Image src={m.image_url} alt={m.name} fill sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 280px" loading="lazy" className="card-image" />
+                    : <div className="card-image-placeholder"><Grid3x3 size={48} strokeWidth={1} /></div>}
+                  {m.size && <span className="card-image-size-badge">{(m.size as unknown as { label: string }).label}</span>}
+                </div>
+                <div className="card-body">
+                  <h3 className="card-title">{m.name}</h3>
+                  {m.brand && <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{(m.brand as unknown as { name: string }).name}</p>}
+                </div>
+                <div className="card-footer">
+                  <span style={{ fontWeight: 700 }}>
+                    {m.price_per_sqm
+                      ? <>{formatPrice(m.price_per_sqm)}<span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}> /m²</span></>
+                      : '—'}
+                  </span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Stock: {m.stock}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {cenefas.length > 0 && (
+        <section style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <Rows3 size={18} />
+            <h2 style={{ fontSize: '16px', fontWeight: 700 }}>Cenefas ({cenefas.length})</h2>
+          </div>
+          <div className="product-grid">
+            {cenefas.map((c) => (
+              <Link key={c.id} href={`/cenefas/${c.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
+                <div className="card-image-wrapper">
+                  {c.image_url
+                    ? <Image src={c.image_url} alt={c.name} fill sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 280px" loading="lazy" className="card-image" />
+                    : <div className="card-image-placeholder"><Rows3 size={48} strokeWidth={1} /></div>}
+                  {c.size && <span className="card-image-size-badge">{(c.size as unknown as { label: string }).label}</span>}
+                </div>
+                <div className="card-body">
+                  <h3 className="card-title">{c.name}</h3>
+                  {c.brand && <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{(c.brand as unknown as { name: string }).name}</p>}
+                </div>
+                <div className="card-footer">
+                  <span style={{ fontWeight: 700 }}>
+                    {c.price_per_sqm
+                      ? <>{formatPrice(c.price_per_sqm)}<span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}> /m²</span></>
+                      : '—'}
+                  </span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Stock: {c.stock}</span>
                 </div>
               </Link>
             ))}
