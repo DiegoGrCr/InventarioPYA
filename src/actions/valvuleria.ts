@@ -124,6 +124,7 @@ export async function createValvuleria(formData: FormData) {
     stock: totalStock,
     price: parseFloat(formData.get('price') as string) || null,
     image_url: imageUrl,
+    comments: (formData.get('comments') as string) || null,
   }).select('id').single()
 
   if (error) return { error: error.message }
@@ -153,6 +154,7 @@ export async function updateValvuleria(id: string, formData: FormData) {
     stock: totalStock,
     price: parseFloat(formData.get('price') as string) || null,
     image_url: imageUrl || undefined,
+    comments: (formData.get('comments') as string) || null,
   }).eq('id', id)
 
   if (error) return { error: error.message }

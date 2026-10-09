@@ -116,6 +116,10 @@ export interface Valvuleria {
   image_url: string | null
   stock: number
   price: number | null
+  // Notas libres (ej. "a este juego le falta la pieza X") — se sincroniza
+  // con la columna COMENTARIOS de la hoja de Sheets, editable desde ambos
+  // lados igual que SKU/Precio en bodegas totalmente editables.
+  comments: string | null
   is_active: boolean
   created_at: string
   updated_at: string

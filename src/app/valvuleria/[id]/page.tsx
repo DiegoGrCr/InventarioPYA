@@ -101,10 +101,19 @@ export default async function ValvuleriaDetailPage({ params }: { params: Promise
           </div>
 
           {item.description && (
-            <div className="card">
+            <div className="card" style={{ marginBottom: '16px' }}>
               <div className="card-body">
                 <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>Descripción</h3>
                 <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{item.description}</p>
+              </div>
+            </div>
+          )}
+
+          {item.comments && (
+            <div className="card">
+              <div className="card-body">
+                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>Comentarios</h3>
+                <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{item.comments}</p>
               </div>
             </div>
           )}

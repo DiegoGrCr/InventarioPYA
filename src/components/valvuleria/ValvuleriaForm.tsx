@@ -240,6 +240,19 @@ export default function ValvuleriaForm({ item, bodegaStock = [] }: ValvuleriaFor
         />
       </div>
 
+      <div className="form-group">
+        <label className="form-label">Comentarios</label>
+        <textarea
+          name="comments"
+          className="form-textarea"
+          defaultValue={item?.comments || ''}
+          placeholder="Ej: a este juego le falta la pieza X..."
+        />
+        <div className="form-hint" style={{ marginTop: '4px' }}>
+          Se sincroniza con la columna COMENTARIOS de la hoja de cálculo.
+        </div>
+      </div>
+
       <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
         <button type="submit" className="btn btn-primary" disabled={loading || uploading}>
           {loading

@@ -21,6 +21,7 @@ interface ValvuleriaMasterRow {
   precio: number | null
   stock: number
   imageUrl: string | null
+  comments: string | null
 }
 
 async function fetchValvuleriaMasterData(supabase: ReturnType<typeof createPlainSupabaseClient>, bodegas: string[]): Promise<Map<string, ValvuleriaMasterRow[]>> {
@@ -32,20 +33,20 @@ async function fetchValvuleriaMasterData(supabase: ReturnType<typeof createPlain
   // tabla (igual que Adhesivos) — no hay join a `brands`.
   const { data, error } = await supabase
     .from('valvuleria_bodega_stock')
-    .select('bodega, stock, valvuleria:valvuleria!inner(id, name, sku, price, is_active, image_url, brand)')
+    .select('bodega, stock, valvuleria:valvuleria!inner(id, name, sku, price, is_active, image_url, brand, comments)')
     .in('bodega', bodegas)
     .eq('valvuleria.is_active', true)
 
   if (error) throw new Error(`Error leyendo valvuleria_bodega_stock: ${error.message}`)
 
-  interface ValvuleriaJoin { id: string; name: string; sku: string | null; price: number | null; image_url: string | null; brand: string | null }
+  interface ValvuleriaJoin { id: string; name: string; sku: string | null; price: number | null; image_url: string | null; brand: string | null; comments: string | null }
 
   ;(data || []).forEach(row => {
     const v = row.valvuleria as unknown as ValvuleriaJoin | null
     if (!v) return
     const list = result.get(row.bodega)
     if (!list) return
-    list.push({ valvuleriaId: v.id, name: v.name, brand: v.brand, sku: v.sku, precio: v.price, stock: row.stock, imageUrl: v.image_url })
+    list.push({ valvuleriaId: v.id, name: v.name, brand: v.brand, sku: v.sku, precio: v.price, stock: row.stock, imageUrl: v.image_url, comments: v.comments })
   })
   return result
 }
@@ -79,9 +80,11 @@ interface ParsedValvuleriaRow {
   // en sheetSync.ts (Pisos). Solo se lee para preservarla en una
   // reconstrucción completa, el sync nunca la compara ni la escribe.
   fechaActualizacion: string
-  // Notas libres del personal (ej. "a este juego le falta la pieza X") —
-  // mismo criterio 100% manual que fechaActualizacion, exclusivo de Valvulería.
+  // Notas libres (ej. "a este juego le falta la pieza X") — a diferencia de
+  // fechaActualizacion, ESTA sí se sincroniza con la BDD/el formulario web,
+  // mismo patrón que sku/trackedSku.
   comentarios: string
+  trackedComentarios: string
 }
 
 function cellRaw(v: CellValue | undefined): string {
@@ -129,6 +132,7 @@ function parseValvuleriaTabRows(rows: CellValue[][]): ParsedValvuleriaRow[] {
       trackedSku: cellIdText(r[COL_VALVULERIA.LAST_SYNCED_SKU]),
       fechaActualizacion: cellRaw(r[COL_VALVULERIA.FECHA_ACTUALIZACION]),
       comentarios: cellRaw(r[COL_VALVULERIA.COMENTARIOS]),
+      trackedComentarios: cellRaw(r[COL_VALVULERIA.LAST_SYNCED_COMMENTS]),
     })
   }
   return out
@@ -140,12 +144,12 @@ interface ValvuleriaBodegaSheetState {
   rows: ParsedValvuleriaRow[]
 }
 
-interface ValvuleriaPullMapEntry { name?: string; price?: number | null; sku?: string | null }
+interface ValvuleriaPullMapEntry { name?: string; price?: number | null; sku?: string | null; comments?: string | null }
 
 interface ValvuleriaPullOutcome {
   pullMap: Map<string, ValvuleriaPullMapEntry>
   stockPushes: { valvuleriaId: string; bodega: string; stock: number }[]
-  conflicts: { valvuleriaId: string; field: 'name' | 'price' | 'sku' }[]
+  conflicts: { valvuleriaId: string; field: 'name' | 'price' | 'sku' | 'comments' }[]
   sheetStates: ValvuleriaBodegaSheetState[]
 }
 
@@ -193,6 +197,11 @@ async function pullValvuleriaPhase(
           if (existing?.sku !== undefined && existing.sku !== (row.sku || null)) conflicts.push({ valvuleriaId: row.valvuleriaId, field: 'sku' })
           pullMap.set(row.valvuleriaId, { ...existing, sku: row.sku || null })
         }
+        if (row.comentarios !== row.trackedComentarios) {
+          const existing = pullMap.get(row.valvuleriaId)
+          if (existing?.comments !== undefined && existing.comments !== (row.comentarios || null)) conflicts.push({ valvuleriaId: row.valvuleriaId, field: 'comments' })
+          pullMap.set(row.valvuleriaId, { ...existing, comments: row.comentarios || null })
+        }
       }
     }
     sheetStates.push({ config, tab, rows })
@@ -217,6 +226,7 @@ async function applyValvuleriaPulls(
     if (changes.name !== undefined) patch.name = changes.name
     if (changes.price !== undefined) patch.price = changes.price
     if (changes.sku !== undefined) patch.sku = changes.sku
+    if (changes.comments !== undefined) patch.comments = changes.comments
     if (Object.keys(patch).length > 0) {
       const { error } = await supabase.from('valvuleria').update(patch).eq('id', id)
       if (error) console.error(`[sync-valvuleria] no se pudo aplicar el cambio de Sheets al producto ${id}: ${error.message}`)
@@ -233,14 +243,16 @@ async function applyValvuleriaPulls(
 
 // -------- Fase B: reconciliar la pestaña contra los datos ya actualizados --------
 
-function buildValvuleriaTabContentValues(rows: ValvuleriaMasterRow[], preservedFechas: Map<string, string>, preservedComentarios: Map<string, string>): (string | number)[][] {
+function buildValvuleriaTabContentValues(rows: ValvuleriaMasterRow[], preservedFechas: Map<string, string>): (string | number)[][] {
   // FOTO (col 0) va en blanco aquí a propósito: este arreglo se escribe con
   // RAW (ver batchWriteCells), que guardaría la fórmula =IMAGE(...) como
   // texto literal en vez de evaluarla. Se llena aparte con
   // buildValvuleriaFotoValues() en una llamada separada con USER_ENTERED.
+  // COMENTARIOS (a diferencia de FECHA_ACTUALIZACION) sí viene de la BDD —
+  // se escribe tal cual, igual que SKU, junto con su columna de rastreo.
   return sortValvuleriaRows(rows).map(it => [
-    '', it.brand || 'Sin marca', it.sku ?? '', it.name, it.stock, it.precio ?? '', preservedFechas.get(it.valvuleriaId) || '', preservedComentarios.get(it.valvuleriaId) || '',
-    it.valvuleriaId, it.name, it.precio ?? '', it.sku ?? '',
+    '', it.brand || 'Sin marca', it.sku ?? '', it.name, it.stock, it.precio ?? '', preservedFechas.get(it.valvuleriaId) || '', it.comments ?? '',
+    it.valvuleriaId, it.name, it.precio ?? '', it.sku ?? '', it.comments ?? '',
   ])
 }
 
@@ -305,8 +317,7 @@ async function reconcileValvuleriaBodega(
   if (structurallyDifferent) {
     if (!isNewTab) toClear.push(VALVULERIA_TAB_NAME)
     const preservedFechas = new Map(actualRows.map(r => [r.valvuleriaId, r.fechaActualizacion]))
-    const preservedComentarios = new Map(actualRows.map(r => [r.valvuleriaId, r.comentarios]))
-    const values = buildValvuleriaTabContentValues(freshRows, preservedFechas, preservedComentarios)
+    const values = buildValvuleriaTabContentValues(freshRows, preservedFechas)
     if (values.length > 0) {
       writes.push({ range: rowRangeValvuleria(VALVULERIA_TAB_NAME, 2, 1 + values.length), values })
       fotoWrites.push({ range: colRange(VALVULERIA_TAB_NAME, COL_VALVULERIA.FOTO, 2, 1 + values.length), values: buildValvuleriaFotoValues(freshRows) })
@@ -342,6 +353,12 @@ async function reconcileValvuleriaBodega(
       }
       if (row.trackedSku !== (authoritative.sku ?? '')) {
         writes.push({ range: cellRange(VALVULERIA_TAB_NAME, COL_VALVULERIA.LAST_SYNCED_SKU, row.rowIndex1), values: [[authoritative.sku ?? '']] })
+      }
+      if (row.comentarios !== (authoritative.comments ?? '')) {
+        writes.push({ range: cellRange(VALVULERIA_TAB_NAME, COL_VALVULERIA.COMENTARIOS, row.rowIndex1), values: [[authoritative.comments ?? '']] })
+      }
+      if (row.trackedComentarios !== (authoritative.comments ?? '')) {
+        writes.push({ range: cellRange(VALVULERIA_TAB_NAME, COL_VALVULERIA.LAST_SYNCED_COMMENTS, row.rowIndex1), values: [[authoritative.comments ?? '']] })
       }
     }
   }

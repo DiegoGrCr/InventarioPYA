@@ -1274,24 +1274,29 @@ export const COL_VALVULERIA = {
   // Control 100% manual del encargado de inventarios — el sync NUNCA la lee
   // ni la escribe (ver el mismo campo en COL de Pisos).
   FECHA_ACTUALIZACION: 6,
-  // Igual de manual que FECHA_ACTUALIZACION — notas libres del personal (ej.
-  // "a este juego le falta la pieza X"), solo para Valvulería.
+  // Notas libres del personal (ej. "a este juego le falta la pieza X"),
+  // exclusiva de Valvulería — a diferencia de FECHA_ACTUALIZACION, ESTA sí
+  // se sincroniza con la BDD (campo comments) y con el formulario de
+  // registro en la web, con su propio rastreo _last_synced_comments (mismo
+  // criterio que SKU: protegida por defecto, editable solo en bodegas
+  // fullyEditable).
   COMENTARIOS: 7,
   VALVULERIA_ID: 8,
   LAST_SYNCED_NAME: 9,
   LAST_SYNCED_PRICE: 10,
   LAST_SYNCED_SKU: 11,
+  LAST_SYNCED_COMMENTS: 12,
 } as const
 
 export const HEADERS_VALVULERIA = [
   'FOTO', 'MARCA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO', 'FECHA ACTUALIZACIÓN', 'COMENTARIOS',
-  '_valvuleria_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku',
+  '_valvuleria_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku', '_last_synced_comments',
 ]
 
 export const VALVULERIA_TAB_NAME = 'Valvulería'
 
 export function rowRangeValvuleria(title: string, startRow1: number, endRow1: number): string {
-  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_VALVULERIA.LAST_SYNCED_SKU)}${endRow1}`
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_VALVULERIA.LAST_SYNCED_COMMENTS)}${endRow1}`
 }
 
 const VISIBLE_COLS_VALVULERIA = { startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.COMENTARIOS + 1 }
@@ -1323,7 +1328,7 @@ export function buildValvuleriaProtectionRequests(sheetId: number, serviceAccoun
 
   requests.push(
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startColumnIndex: COL_VALVULERIA.VALVULERIA_ID, endColumnIndex: COL_VALVULERIA.LAST_SYNCED_SKU + 1 },
+      range: { sheetId, startColumnIndex: COL_VALVULERIA.VALVULERIA_ID, endColumnIndex: COL_VALVULERIA.LAST_SYNCED_COMMENTS + 1 },
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
@@ -1333,8 +1338,10 @@ export function buildValvuleriaProtectionRequests(sheetId: number, serviceAccoun
   )
 
   const editableEndRow = 1 + rowCount
-  // FECHA_ACTUALIZACION y COMENTARIOS quedan libres SIEMPRE — ver el mismo
-  // campo en buildProtectionRequests (Pisos).
+  // FECHA_ACTUALIZACION queda libre SIEMPRE — ver el mismo campo en
+  // buildProtectionRequests (Pisos). COMENTARIOS en cambio sigue el mismo
+  // criterio que SKU/PRECIO: protegida por defecto, libre solo en bodegas
+  // fullyEditable (se sincroniza con la BDD, no es control 100% manual).
   const fechaActualizacionRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 }
   const comentariosRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.COMENTARIOS, endColumnIndex: COL_VALVULERIA.COMENTARIOS + 1 }
   const unprotectedRanges = fullyEditable
@@ -1346,7 +1353,6 @@ export function buildValvuleriaProtectionRequests(sheetId: number, serviceAccoun
     : [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.CANTIDAD, endColumnIndex: COL_VALVULERIA.CANTIDAD + 1 },
         fechaActualizacionRange,
-        comentariosRange,
       ]
 
   requests.push({ addProtectedRange: { protectedRange: {
@@ -1366,7 +1372,7 @@ export function buildValvuleriaHideColumnsRequest(sheetId: number): sheets_v4.Sc
       fields: 'hiddenByUser',
     } },
     { updateDimensionProperties: {
-      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_VALVULERIA.VALVULERIA_ID, endIndex: COL_VALVULERIA.LAST_SYNCED_SKU + 1 },
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_VALVULERIA.VALVULERIA_ID, endIndex: COL_VALVULERIA.LAST_SYNCED_COMMENTS + 1 },
       properties: { hiddenByUser: true },
       fields: 'hiddenByUser',
     } },
