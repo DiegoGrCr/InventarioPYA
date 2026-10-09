@@ -79,6 +79,9 @@ interface ParsedValvuleriaRow {
   // en sheetSync.ts (Pisos). Solo se lee para preservarla en una
   // reconstrucción completa, el sync nunca la compara ni la escribe.
   fechaActualizacion: string
+  // Notas libres del personal (ej. "a este juego le falta la pieza X") —
+  // mismo criterio 100% manual que fechaActualizacion, exclusivo de Valvulería.
+  comentarios: string
 }
 
 function cellRaw(v: CellValue | undefined): string {
@@ -125,6 +128,7 @@ function parseValvuleriaTabRows(rows: CellValue[][]): ParsedValvuleriaRow[] {
       sku: cellIdText(r[COL_VALVULERIA.SKU]),
       trackedSku: cellIdText(r[COL_VALVULERIA.LAST_SYNCED_SKU]),
       fechaActualizacion: cellRaw(r[COL_VALVULERIA.FECHA_ACTUALIZACION]),
+      comentarios: cellRaw(r[COL_VALVULERIA.COMENTARIOS]),
     })
   }
   return out
@@ -229,13 +233,13 @@ async function applyValvuleriaPulls(
 
 // -------- Fase B: reconciliar la pestaña contra los datos ya actualizados --------
 
-function buildValvuleriaTabContentValues(rows: ValvuleriaMasterRow[], preservedFechas: Map<string, string>): (string | number)[][] {
+function buildValvuleriaTabContentValues(rows: ValvuleriaMasterRow[], preservedFechas: Map<string, string>, preservedComentarios: Map<string, string>): (string | number)[][] {
   // FOTO (col 0) va en blanco aquí a propósito: este arreglo se escribe con
   // RAW (ver batchWriteCells), que guardaría la fórmula =IMAGE(...) como
   // texto literal en vez de evaluarla. Se llena aparte con
   // buildValvuleriaFotoValues() en una llamada separada con USER_ENTERED.
   return sortValvuleriaRows(rows).map(it => [
-    '', it.brand || 'Sin marca', it.sku ?? '', it.name, it.stock, it.precio ?? '', preservedFechas.get(it.valvuleriaId) || '',
+    '', it.brand || 'Sin marca', it.sku ?? '', it.name, it.stock, it.precio ?? '', preservedFechas.get(it.valvuleriaId) || '', preservedComentarios.get(it.valvuleriaId) || '',
     it.valvuleriaId, it.name, it.precio ?? '', it.sku ?? '',
   ])
 }
@@ -301,7 +305,8 @@ async function reconcileValvuleriaBodega(
   if (structurallyDifferent) {
     if (!isNewTab) toClear.push(VALVULERIA_TAB_NAME)
     const preservedFechas = new Map(actualRows.map(r => [r.valvuleriaId, r.fechaActualizacion]))
-    const values = buildValvuleriaTabContentValues(freshRows, preservedFechas)
+    const preservedComentarios = new Map(actualRows.map(r => [r.valvuleriaId, r.comentarios]))
+    const values = buildValvuleriaTabContentValues(freshRows, preservedFechas, preservedComentarios)
     if (values.length > 0) {
       writes.push({ range: rowRangeValvuleria(VALVULERIA_TAB_NAME, 2, 1 + values.length), values })
       fotoWrites.push({ range: colRange(VALVULERIA_TAB_NAME, COL_VALVULERIA.FOTO, 2, 1 + values.length), values: buildValvuleriaFotoValues(freshRows) })

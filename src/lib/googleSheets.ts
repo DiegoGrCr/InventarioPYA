@@ -1274,14 +1274,17 @@ export const COL_VALVULERIA = {
   // Control 100% manual del encargado de inventarios — el sync NUNCA la lee
   // ni la escribe (ver el mismo campo en COL de Pisos).
   FECHA_ACTUALIZACION: 6,
-  VALVULERIA_ID: 7,
-  LAST_SYNCED_NAME: 8,
-  LAST_SYNCED_PRICE: 9,
-  LAST_SYNCED_SKU: 10,
+  // Igual de manual que FECHA_ACTUALIZACION — notas libres del personal (ej.
+  // "a este juego le falta la pieza X"), solo para Valvulería.
+  COMENTARIOS: 7,
+  VALVULERIA_ID: 8,
+  LAST_SYNCED_NAME: 9,
+  LAST_SYNCED_PRICE: 10,
+  LAST_SYNCED_SKU: 11,
 } as const
 
 export const HEADERS_VALVULERIA = [
-  'FOTO', 'MARCA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO', 'FECHA ACTUALIZACIÓN',
+  'FOTO', 'MARCA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO', 'FECHA ACTUALIZACIÓN', 'COMENTARIOS',
   '_valvuleria_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku',
 ]
 
@@ -1291,10 +1294,10 @@ export function rowRangeValvuleria(title: string, startRow1: number, endRow1: nu
   return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_VALVULERIA.LAST_SYNCED_SKU)}${endRow1}`
 }
 
-const VISIBLE_COLS_VALVULERIA = { startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 }
+const VISIBLE_COLS_VALVULERIA = { startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.COMENTARIOS + 1 }
 // Arranca en MARCA (no en FOTO) para no pintar la celda de la foto — mismo
 // criterio que MESH_ZERO_STOCK_HIGHLIGHT_COLS.
-const VALVULERIA_ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL_VALVULERIA.MARCA, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 }
+const VALVULERIA_ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL_VALVULERIA.MARCA, endColumnIndex: COL_VALVULERIA.COMENTARIOS + 1 }
 
 export function buildValvuleriaProtectionRequests(sheetId: number, serviceAccountEmail: string, rowCount: number, fullyEditable = false): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
@@ -1324,23 +1327,26 @@ export function buildValvuleriaProtectionRequests(sheetId: number, serviceAccoun
       description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
     } } },
     { addProtectedRange: { protectedRange: {
-      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 },
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.COMENTARIOS + 1 },
       description: 'Encabezados - solo lectura', warningOnly: false, editors,
     } } },
   )
 
   const editableEndRow = 1 + rowCount
-  // FECHA_ACTUALIZACION queda libre SIEMPRE — ver el mismo campo en
-  // buildProtectionRequests (Pisos).
+  // FECHA_ACTUALIZACION y COMENTARIOS quedan libres SIEMPRE — ver el mismo
+  // campo en buildProtectionRequests (Pisos).
   const fechaActualizacionRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 }
+  const comentariosRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.COMENTARIOS, endColumnIndex: COL_VALVULERIA.COMENTARIOS + 1 }
   const unprotectedRanges = fullyEditable
     ? [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.SKU, endColumnIndex: COL_VALVULERIA.PRECIO + 1 },
         fechaActualizacionRange,
+        comentariosRange,
       ]
     : [
         { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.CANTIDAD, endColumnIndex: COL_VALVULERIA.CANTIDAD + 1 },
         fechaActualizacionRange,
+        comentariosRange,
       ]
 
   requests.push({ addProtectedRange: { protectedRange: {
@@ -1398,6 +1404,7 @@ export function buildValvuleriaRepeatableStyleRequests(sheetId: number): sheets_
   const widths: [number, number][] = [
     [COL_VALVULERIA.FOTO, 114], [COL_VALVULERIA.MARCA, 110], [COL_VALVULERIA.SKU, 110], [COL_VALVULERIA.DESCRIPCION, 220],
     [COL_VALVULERIA.CANTIDAD, 130], [COL_VALVULERIA.PRECIO, 100], [COL_VALVULERIA.FECHA_ACTUALIZACION, 140],
+    [COL_VALVULERIA.COMENTARIOS, 240],
   ]
   return [
     // Filas más altas para que la foto (IMAGE con alto fijo de 100px) se vea
