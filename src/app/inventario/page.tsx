@@ -8,7 +8,7 @@ export default async function InventarioPage() {
 
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: products }, { data: meshes }, { data: cenefas }, { data: banos }, { data: accessories }, { data: brands }, { data: sizes }, { data: bodegaStockRows }, { data: meshBodegaStockRows }, { data: cenefaBodegaStockRows }, { data: accessoryBodegaStockRows }] = await Promise.all([
+  const [{ data: products }, { data: meshes }, { data: cenefas }, { data: banos }, { data: accessories }, { data: valvuleria }, { data: brands }, { data: sizes }, { data: bodegaStockRows }, { data: meshBodegaStockRows }, { data: cenefaBodegaStockRows }, { data: accessoryBodegaStockRows }, { data: valvuleriaBodegaStockRows }] = await Promise.all([
     supabase
       .from('products')
       .select('id, name, stock, sku, material, brand_id, size_id, sale_unit, price_per_sqm, price_per_box, sqm_per_box, pieces_per_box, brand:brands(name), size:sizes(label, width, height)')
@@ -34,12 +34,18 @@ export default async function InventarioPage() {
       .select('id, name, stock, category, bodegas')
       .eq('is_active', true)
       .order('stock', { ascending: true }),
+    supabase
+      .from('valvuleria')
+      .select('id, name, stock, brand, price')
+      .eq('is_active', true)
+      .order('stock', { ascending: true }),
     supabase.from('brands').select('id, name').order('name'),
     supabase.from('sizes').select('id, label, width, height'),
     supabase.from('product_bodega_stock').select('product_id, bodega, stock'),
     supabase.from('mesh_bodega_stock').select('mesh_id, bodega, stock'),
     supabase.from('cenefa_bodega_stock').select('cenefa_id, bodega, stock'),
     supabase.from('accessory_bodega_stock').select('accessory_id, bodega, stock'),
+    supabase.from('valvuleria_bodega_stock').select('valvuleria_id, bodega, stock'),
   ])
 
   const sortedSizes = (sizes || []).sort((a, b) => (a.width * a.height) - (b.width * b.height))
@@ -68,6 +74,12 @@ export default async function InventarioPage() {
     bodegaStockByAccessory[r.accessory_id].push({ bodega: r.bodega, stock: r.stock })
   })
 
+  const bodegaStockByValvuleria: Record<string, { bodega: string; stock: number }[]> = {}
+  ;(valvuleriaBodegaStockRows || []).forEach(r => {
+    if (!bodegaStockByValvuleria[r.valvuleria_id]) bodegaStockByValvuleria[r.valvuleria_id] = []
+    bodegaStockByValvuleria[r.valvuleria_id].push({ bodega: r.bodega, stock: r.stock })
+  })
+
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -83,12 +95,14 @@ export default async function InventarioPage() {
         cenefas={(cenefas || []) as any}
         banos={(banos || []) as any}
         accessories={(accessories || []) as any}
+        valvuleria={(valvuleria || []) as any}
         brands={(brands || []) as any}
         sizes={sortedSizes as any}
         bodegaStockByProduct={bodegaStockByProduct}
         bodegaStockByMesh={bodegaStockByMesh}
         bodegaStockByCenefa={bodegaStockByCenefa}
         bodegaStockByAccessory={bodegaStockByAccessory}
+        bodegaStockByValvuleria={bodegaStockByValvuleria}
       />
     </div>
   )

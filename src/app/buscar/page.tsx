@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Image from 'next/image'
 import { formatPrice, likeSafe } from '@/lib/utils'
-import { Layers, Toilet, Package, Search, Grid3x3, Rows3 } from 'lucide-react'
+import { Layers, Toilet, Package, Search, Grid3x3, Rows3, Wrench } from 'lucide-react'
 
 export default async function BuscarPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q } = await searchParams
@@ -20,7 +20,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
         <div className="empty-state">
           <div className="empty-state-icon"><Search size={48} strokeWidth={1} /></div>
           <h3>¿Qué estás buscando?</h3>
-          <p>Usa el buscador de arriba para encontrar pisos, mallas, cenefas, baños o adhesivos</p>
+          <p>Usa el buscador de arriba para encontrar pisos, mallas, cenefas, baños, adhesivos o valvulería</p>
         </div>
       </div>
     )
@@ -40,7 +40,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
   const sizeIds = (matchingSizes || []).map((s) => s.id)
   const sizeFilter = sizeIds.length > 0 ? `,size_id.in.(${sizeIds.join(',')})` : ''
 
-  const [pisosRes, mallasRes, cenefasRes, banosRes, compRes] = await Promise.all([
+  const [pisosRes, mallasRes, cenefasRes, banosRes, compRes, valvuleriaRes] = await Promise.all([
     supabase.from('products')
       .select('id, name, image_url, price_per_sqm, stock, brand:brands(name), size:sizes(label)')
       .eq('is_active', true)
@@ -66,6 +66,11 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
       .eq('is_active', true)
       .or(`name.ilike.${likeOr},description.ilike.${likeOr},brand.ilike.${likeOr},color.ilike.${likeOr}`)
       .limit(200),
+    supabase.from('valvuleria')
+      .select('id, name, image_url, price, stock, brand')
+      .eq('is_active', true)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},brand.ilike.${likeOr}`)
+      .limit(200),
   ])
 
   const pisos = pisosRes.data || []
@@ -73,7 +78,8 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
   const cenefas = cenefasRes.data || []
   const banos = banosRes.data || []
   const complementos = compRes.data || []
-  const total = pisos.length + mallas.length + cenefas.length + banos.length + complementos.length
+  const valvuleria = valvuleriaRes.data || []
+  const total = pisos.length + mallas.length + cenefas.length + banos.length + complementos.length + valvuleria.length
 
   return (
     <div className="fade-in">
@@ -221,7 +227,7 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
       )}
 
       {complementos.length > 0 && (
-        <section>
+        <section style={{ marginBottom: '32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
             <Package size={18} />
             <h2 style={{ fontSize: '16px', fontWeight: 700 }}>Adhesivos ({complementos.length})</h2>
@@ -241,6 +247,34 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
                 <div className="card-footer">
                   <span style={{ fontWeight: 700 }}>{c.price ? formatPrice(c.price) : '—'}</span>
                   <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Stock: {c.stock}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {valvuleria.length > 0 && (
+        <section>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <Wrench size={18} />
+            <h2 style={{ fontSize: '16px', fontWeight: 700 }}>Valvulería ({valvuleria.length})</h2>
+          </div>
+          <div className="product-grid">
+            {valvuleria.map((v) => (
+              <Link key={v.id} href={`/valvuleria/${v.id}`} className="card fade-in" style={{ textDecoration: 'none' }}>
+                <div className="card-image-wrapper">
+                  {v.image_url
+                    ? <Image src={v.image_url} alt={v.name} fill sizes="(max-width: 480px) 100vw, (max-width: 768px) 50vw, 280px" loading="lazy" className="card-image" />
+                    : <div className="card-image-placeholder"><Wrench size={48} strokeWidth={1} /></div>}
+                </div>
+                <div className="card-body">
+                  <h3 className="card-title">{v.name}</h3>
+                  {v.brand && <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{v.brand}</p>}
+                </div>
+                <div className="card-footer">
+                  <span style={{ fontWeight: 700 }}>{v.price ? formatPrice(v.price) : '—'}</span>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Stock: {v.stock}</span>
                 </div>
               </Link>
             ))}

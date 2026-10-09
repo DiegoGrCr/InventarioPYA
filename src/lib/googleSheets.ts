@@ -1255,3 +1255,196 @@ export function buildCenefaRepeatableStyleRequests(sheetId: number): sheets_v4.S
     })),
   ]
 }
+
+// ==================== Valvulería (pestaña plana, sin agrupar por marca) ====================
+// Mismo patrón de pestaña plana que Mallas/Cenefas/Adhesivos, pero sin
+// FORMATO/PIEZAS/M² (no aplica a válvulas/conexiones) y con FOTO (como
+// Mallas) — combinación de ambos patrones. Solo CANTIDAD queda editable por
+// defecto para el personal (igual que Adhesivos, ni siquiera DESCRIPCIÓN),
+// MARCA se queda protegida siempre (texto libre sin rastreo propio, igual
+// que MARCA en Adhesivos).
+
+export const COL_VALVULERIA = {
+  FOTO: 0,
+  MARCA: 1,
+  SKU: 2,
+  DESCRIPCION: 3,
+  CANTIDAD: 4,
+  PRECIO: 5,
+  // Control 100% manual del encargado de inventarios — el sync NUNCA la lee
+  // ni la escribe (ver el mismo campo en COL de Pisos).
+  FECHA_ACTUALIZACION: 6,
+  VALVULERIA_ID: 7,
+  LAST_SYNCED_NAME: 8,
+  LAST_SYNCED_PRICE: 9,
+  LAST_SYNCED_SKU: 10,
+} as const
+
+export const HEADERS_VALVULERIA = [
+  'FOTO', 'MARCA', 'SKU', 'DESCRIPCIÓN', 'CANTIDAD', 'PRECIO', 'FECHA ACTUALIZACIÓN',
+  '_valvuleria_id', '_last_synced_name', '_last_synced_price', '_last_synced_sku',
+]
+
+export const VALVULERIA_TAB_NAME = 'Valvulería'
+
+export function rowRangeValvuleria(title: string, startRow1: number, endRow1: number): string {
+  return `${quoteTitle(title)}!A${startRow1}:${colLetter(COL_VALVULERIA.LAST_SYNCED_SKU)}${endRow1}`
+}
+
+const VISIBLE_COLS_VALVULERIA = { startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 }
+// Arranca en MARCA (no en FOTO) para no pintar la celda de la foto — mismo
+// criterio que MESH_ZERO_STOCK_HIGHLIGHT_COLS.
+const VALVULERIA_ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL_VALVULERIA.MARCA, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 }
+
+export function buildValvuleriaProtectionRequests(sheetId: number, serviceAccountEmail: string, rowCount: number, fullyEditable = false): sheets_v4.Schema$Request[] {
+  const editors = { users: [serviceAccountEmail] }
+  const requests: sheets_v4.Schema$Request[] = []
+
+  if (fullyEditable) {
+    requests.push({ addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.MARCA + 1 },
+      description: 'FOTO/MARCA - solo lectura', warningOnly: false, editors,
+    } } })
+  } else {
+    requests.push(
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.DESCRIPCION + 1 },
+        description: 'FOTO/MARCA/SKU/DESCRIPCIÓN - solo lectura', warningOnly: false, editors,
+      } } },
+      { addProtectedRange: { protectedRange: {
+        range: { sheetId, startColumnIndex: COL_VALVULERIA.PRECIO, endColumnIndex: COL_VALVULERIA.PRECIO + 1 },
+        description: 'PRECIO - solo lectura', warningOnly: false, editors,
+      } } },
+    )
+  }
+
+  requests.push(
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_VALVULERIA.VALVULERIA_ID, endColumnIndex: COL_VALVULERIA.LAST_SYNCED_SKU + 1 },
+      description: 'Columnas internas de sincronización - no editar', warningOnly: false, editors,
+    } } },
+    { addProtectedRange: { protectedRange: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 },
+      description: 'Encabezados - solo lectura', warningOnly: false, editors,
+    } } },
+  )
+
+  const editableEndRow = 1 + rowCount
+  // FECHA_ACTUALIZACION queda libre SIEMPRE — ver el mismo campo en
+  // buildProtectionRequests (Pisos).
+  const fechaActualizacionRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 }
+  const unprotectedRanges = fullyEditable
+    ? [
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.SKU, endColumnIndex: COL_VALVULERIA.PRECIO + 1 },
+        fechaActualizacionRange,
+      ]
+    : [
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.CANTIDAD, endColumnIndex: COL_VALVULERIA.CANTIDAD + 1 },
+        fechaActualizacionRange,
+      ]
+
+  requests.push({ addProtectedRange: { protectedRange: {
+    range: { sheetId },
+    unprotectedRanges,
+    description: 'Pestaña protegida - no borrar/renombrar', warningOnly: false, editors,
+  } } })
+
+  return requests
+}
+
+export function buildValvuleriaHideColumnsRequest(sheetId: number): sheets_v4.Schema$Request[] {
+  return [
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_VALVULERIA.FOTO, endIndex: COL_VALVULERIA.VALVULERIA_ID },
+      properties: { hiddenByUser: false },
+      fields: 'hiddenByUser',
+    } },
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'COLUMNS', startIndex: COL_VALVULERIA.VALVULERIA_ID, endIndex: COL_VALVULERIA.LAST_SYNCED_SKU + 1 },
+      properties: { hiddenByUser: true },
+      fields: 'hiddenByUser',
+    } },
+  ]
+}
+
+export function buildValvuleriaZeroStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { addConditionalFormatRule: {
+    rule: {
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...VALVULERIA_ZERO_STOCK_HIGHLIGHT_COLS }],
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_VALVULERIA.VALVULERIA_ID)}2<>"",$${colLetter(COL_VALVULERIA.CANTIDAD)}2=0)` }] },
+        format: { backgroundColor: hexToRgb(COLORS.zeroBg) },
+      },
+    },
+    index: 0,
+  } }
+}
+
+export function buildValvuleriaLowStockHighlightRequest(sheetId: number): sheets_v4.Schema$Request {
+  return { addConditionalFormatRule: {
+    rule: {
+      ranges: [{ sheetId, startRowIndex: 1, endRowIndex: STYLE_LAST_ROW, ...VALVULERIA_ZERO_STOCK_HIGHLIGHT_COLS }],
+      booleanRule: {
+        condition: { type: 'CUSTOM_FORMULA', values: [{ userEnteredValue: `=AND($${colLetter(COL_VALVULERIA.VALVULERIA_ID)}2<>"",$${colLetter(COL_VALVULERIA.CANTIDAD)}2>0,$${colLetter(COL_VALVULERIA.CANTIDAD)}2<=${LOW_STOCK_THRESHOLD})` }] },
+        format: { backgroundColor: hexToRgb(COLORS.lowBg) },
+      },
+    },
+    index: 0,
+  } }
+}
+
+export function buildValvuleriaRepeatableStyleRequests(sheetId: number): sheets_v4.Schema$Request[] {
+  const style = { style: 'SOLID' as const, color: hexToRgb(COLORS.border) }
+  const widths: [number, number][] = [
+    [COL_VALVULERIA.FOTO, 114], [COL_VALVULERIA.MARCA, 110], [COL_VALVULERIA.SKU, 110], [COL_VALVULERIA.DESCRIPCION, 220],
+    [COL_VALVULERIA.CANTIDAD, 130], [COL_VALVULERIA.PRECIO, 100], [COL_VALVULERIA.FECHA_ACTUALIZACION, 140],
+  ]
+  return [
+    // Filas más altas para que la foto (IMAGE con alto fijo de 100px) se vea
+    // completa — el alto de fila por default de Sheets (~21px) la recortaría.
+    { updateDimensionProperties: {
+      range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: STYLE_LAST_ROW },
+      properties: { pixelSize: 108 },
+      fields: 'pixelSize',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, ...VISIBLE_COLS_VALVULERIA },
+      cell: { userEnteredFormat: {
+        backgroundColor: hexToRgb(COLORS.headerBg),
+        textFormat: { bold: true, foregroundColor: hexToRgb(COLORS.headerText) },
+        horizontalAlignment: 'CENTER',
+        verticalAlignment: 'MIDDLE',
+        wrapStrategy: 'WRAP',
+      } },
+      fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)',
+    } },
+    buildHeaderRowHeightRequest(sheetId),
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_VALVULERIA.CANTIDAD, endColumnIndex: COL_VALVULERIA.CANTIDAD + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '0' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_VALVULERIA.PRECIO, endColumnIndex: COL_VALVULERIA.PRECIO + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'NUMBER', pattern: '"$"#,##0.##' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { repeatCell: {
+      range: { sheetId, startRowIndex: 1, startColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 },
+      cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'dd/mm/yyyy' } } },
+      fields: 'userEnteredFormat.numberFormat',
+    } },
+    { updateBorders: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_VALVULERIA },
+      top: style, bottom: style, left: style, right: style, innerHorizontal: style, innerVertical: style,
+    } },
+    { setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, endRowIndex: STYLE_LAST_ROW, ...VISIBLE_COLS_VALVULERIA } } } },
+    ...widths.map(([index, pixelSize]) => ({
+      updateDimensionProperties: {
+        range: { sheetId, dimension: 'COLUMNS' as const, startIndex: index, endIndex: index + 1 },
+        properties: { pixelSize },
+        fields: 'pixelSize',
+      },
+    })),
+  ]
+}

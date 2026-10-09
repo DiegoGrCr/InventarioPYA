@@ -6,9 +6,10 @@ import { updateMeshesPriceBulk, adjustMeshBodegaStock } from '@/actions/meshes'
 import { updateCenefasPriceBulk, adjustCenefaBodegaStock } from '@/actions/cenefas'
 import { updateBanoStock } from '@/actions/banos'
 import { adjustAccessoryBodegaStock } from '@/actions/accessories'
+import { adjustValvuleriaBodegaStock } from '@/actions/valvuleria'
 import { getStockStatus } from '@/lib/utils'
 import { WAREHOUSES } from '@/lib/types'
-import { Layers, Grid3x3, Rows3, Toilet, Package, FileSpreadsheet, Loader2, Tag, ChevronRight, ChevronDown } from 'lucide-react'
+import { Layers, Grid3x3, Rows3, Toilet, Package, Wrench, FileSpreadsheet, Loader2, Tag, ChevronRight, ChevronDown } from 'lucide-react'
 
 type ExportScope = 'all' | 'brand' | 'size' | 'bodega'
 type BodegaRow = { bodega: string; stock: number }
@@ -44,18 +45,20 @@ interface InventoryTableProps {
     price: number | null
   }>
   accessories: Array<{ id: string; name: string; stock: number; category: string; bodegas: string[] | null }>
+  valvuleria: Array<{ id: string; name: string; stock: number; brand: string | null; price: number | null }>
   brands: Array<{ id: string; name: string }>
   sizes: Array<{ id: string; label: string; width: number; height: number }>
   bodegaStockByProduct: Record<string, BodegaRow[]>
   bodegaStockByMesh: Record<string, BodegaRow[]>
   bodegaStockByCenefa: Record<string, BodegaRow[]>
   bodegaStockByAccessory: Record<string, BodegaRow[]>
+  bodegaStockByValvuleria: Record<string, BodegaRow[]>
 }
 
 const fmtBodegas = (bodegas: string[] | null) => (bodegas && bodegas.length > 0 ? bodegas.join(', ') : '')
 
-export default function InventoryTable({ products, meshes, cenefas, banos, accessories, brands, sizes, bodegaStockByProduct, bodegaStockByMesh, bodegaStockByCenefa, bodegaStockByAccessory }: InventoryTableProps) {
-  const [tab, setTab] = useState<'pisos' | 'mallas' | 'cenefas' | 'banos' | 'accesorios'>('pisos')
+export default function InventoryTable({ products, meshes, cenefas, banos, accessories, valvuleria, brands, sizes, bodegaStockByProduct, bodegaStockByMesh, bodegaStockByCenefa, bodegaStockByAccessory, bodegaStockByValvuleria }: InventoryTableProps) {
+  const [tab, setTab] = useState<'pisos' | 'mallas' | 'cenefas' | 'banos' | 'accesorios' | 'valvuleria'>('pisos')
   const [stocks, setStocks] = useState<Record<string, number>>(() => {
     const map: Record<string, number> = {}
     products.forEach(p => { map[p.id] = p.stock })
@@ -63,12 +66,14 @@ export default function InventoryTable({ products, meshes, cenefas, banos, acces
     cenefas.forEach(c => { map[c.id] = c.stock })
     banos.forEach(b => { map[b.id] = b.stock })
     accessories.forEach(a => { map[a.id] = a.stock })
+    valvuleria.forEach(v => { map[v.id] = v.stock })
     return map
   })
   const [bodegaMap, setBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByProduct)
   const [meshBodegaMap, setMeshBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByMesh)
   const [cenefaBodegaMap, setCenefaBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByCenefa)
   const [accessoryBodegaMap, setAccessoryBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByAccessory)
+  const [valvuleriaBodegaMap, setValvuleriaBodegaMap] = useState<Record<string, BodegaRow[]>>(bodegaStockByValvuleria)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState<string | null>(null)
   const [exportScope, setExportScope] = useState<ExportScope>('all')
@@ -341,6 +346,19 @@ export default function InventoryTable({ products, meshes, cenefas, banos, acces
     setSaving(null)
   }
 
+  const adjustValvuleriaBodega = async (valvuleriaId: string, bodega: string, newStock: number) => {
+    if (newStock < 0) return
+    const savingKey = `valv:${valvuleriaId}:${bodega}`
+    setValvuleriaBodegaMap(prev => ({
+      ...prev,
+      [valvuleriaId]: (prev[valvuleriaId] || []).map(r => (r.bodega === bodega ? { ...r, stock: newStock } : r)),
+    }))
+    setSaving(savingKey)
+    const res = await adjustValvuleriaBodegaStock(valvuleriaId, bodega, newStock)
+    if (res.total !== undefined) setStocks(prev => ({ ...prev, [valvuleriaId]: res.total! }))
+    setSaving(null)
+  }
+
   const badgeForStock = (stock: number) => {
     const s = getStockStatus(stock)
     return s === 'available' ? 'badge-success' : s === 'low' ? 'badge-warning' : 'badge-danger'
@@ -453,6 +471,9 @@ export default function InventoryTable({ products, meshes, cenefas, banos, acces
       const scopedAccessories = exportScope === 'bodega' && selectedBodega
         ? accessories.filter(a => (accessoryBodegaMap[a.id] || []).some(r => r.bodega === selectedBodega))
         : accessories
+      const scopedValvuleria = exportScope === 'bodega' && selectedBodega
+        ? valvuleria.filter(v => (valvuleriaBodegaMap[v.id] || []).some(r => r.bodega === selectedBodega))
+        : valvuleria
 
       const workbook = await buildInventoryWorkbook({
         items,
@@ -466,6 +487,14 @@ export default function InventoryTable({ products, meshes, cenefas, banos, acces
             return { name: a.name, category: a.category, bodega: selectedBodega, stock: row?.stock ?? 0 }
           }
           return { name: a.name, category: a.category, bodega: rows.map(r => r.bodega).join(', '), stock: stocks[a.id] }
+        }),
+        valvuleria: scopedValvuleria.map(v => {
+          const rows = valvuleriaBodegaMap[v.id] || []
+          if (exportScope === 'bodega' && selectedBodega) {
+            const row = rows.find(r => r.bodega === selectedBodega)
+            return { name: v.name, brand: v.brand || '', bodega: selectedBodega, stock: row?.stock ?? 0, price: v.price }
+          }
+          return { name: v.name, brand: v.brand || '', bodega: rows.map(r => r.bodega).join(', '), stock: stocks[v.id], price: v.price }
         }),
       })
 
@@ -550,6 +579,7 @@ export default function InventoryTable({ products, meshes, cenefas, banos, acces
         <button className={`tab ${tab === 'cenefas' ? 'active' : ''}`} onClick={() => setTab('cenefas')}><Rows3 size={15} /> Cenefas ({cenefas.length})</button>
         <button className={`tab ${tab === 'banos' ? 'active' : ''}`} onClick={() => setTab('banos')}><Toilet size={15} /> Baños ({banos.length})</button>
         <button className={`tab ${tab === 'accesorios' ? 'active' : ''}`} onClick={() => setTab('accesorios')}><Package size={15} /> Adhesivos ({accessories.length})</button>
+        <button className={`tab ${tab === 'valvuleria' ? 'active' : ''}`} onClick={() => setTab('valvuleria')}><Wrench size={15} /> Valvulería ({valvuleria.length})</button>
       </div>
 
       {tab === 'pisos' && (
@@ -761,6 +791,7 @@ export default function InventoryTable({ products, meshes, cenefas, banos, acces
               {(tab === 'pisos' || tab === 'mallas' || tab === 'cenefas') && <><th>Marca</th><th>Medida</th><th>Precio/m²</th></>}
               {tab === 'banos' && <><th>Marca</th><th>Modelo</th></>}
               {tab === 'accesorios' && <th>Categoría</th>}
+              {tab === 'valvuleria' && <th>Marca</th>}
               <th>Bodega</th>
               <th>Estado</th>
               <th>Stock</th>
@@ -992,6 +1023,53 @@ export default function InventoryTable({ products, meshes, cenefas, banos, acces
                             <button className="stock-btn" onClick={() => adjustAccessoryBodega(a.id, r.bodega, r.stock - 1)} disabled={saving === `acc:${a.id}:${r.bodega}` || r.stock <= 0}>−</button>
                             <span className="stock-value" style={{ opacity: saving === `acc:${a.id}:${r.bodega}` ? 0.5 : 1 }}>{r.stock}</span>
                             <button className="stock-btn" onClick={() => adjustAccessoryBodega(a.id, r.bodega, r.stock + 1)} disabled={saving === `acc:${a.id}:${r.bodega}`}>+</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr style={{ background: 'var(--bg)' }}>
+                        <td></td>
+                        <td colSpan={4} style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                          Sin bodega asignada — edítalo desde &quot;Editar&quot;
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </Fragment>
+              )
+            })}
+            {tab === 'valvuleria' && valvuleria.map(v => {
+              const rows = valvuleriaBodegaMap[v.id] || []
+              const isExpanded = expanded.has(v.id)
+              return (
+                <Fragment key={v.id}>
+                  <tr>
+                    <td style={{ color: 'var(--text)', fontWeight: 500 }}>
+                      <button
+                        onClick={() => toggleExpanded(v.id)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'inherit', font: 'inherit', padding: 0 }}
+                      >
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        {v.name}
+                      </button>
+                    </td>
+                    <td>{v.brand || '—'}</td>
+                    <td style={{ fontSize: '13px' }}>{rows.map(r => r.bodega).join(', ') || '—'}</td>
+                    <td><span className={`badge ${badgeForStock(stocks[v.id])}`}>{stocks[v.id]} unidades</span></td>
+                    <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{stocks[v.id]}</td>
+                  </tr>
+                  {isExpanded && (
+                    rows.length > 0 ? rows.map(r => (
+                      <tr key={`${v.id}-${r.bodega}`} style={{ background: 'var(--bg)' }}>
+                        <td style={{ paddingLeft: '32px', fontSize: '13px', color: 'var(--text-secondary)' }}>↳ {r.bodega}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td>
+                          <div className="stock-control">
+                            <button className="stock-btn" onClick={() => adjustValvuleriaBodega(v.id, r.bodega, r.stock - 1)} disabled={saving === `valv:${v.id}:${r.bodega}` || r.stock <= 0}>−</button>
+                            <span className="stock-value" style={{ opacity: saving === `valv:${v.id}:${r.bodega}` ? 0.5 : 1 }}>{r.stock}</span>
+                            <button className="stock-btn" onClick={() => adjustValvuleriaBodega(v.id, r.bodega, r.stock + 1)} disabled={saving === `valv:${v.id}:${r.bodega}`}>+</button>
                           </div>
                         </td>
                       </tr>

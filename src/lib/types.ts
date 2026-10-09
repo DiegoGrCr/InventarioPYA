@@ -107,6 +107,20 @@ export interface Accessory {
   updated_at: string
 }
 
+export interface Valvuleria {
+  id: string
+  name: string
+  description: string | null
+  brand: string | null
+  sku: string | null
+  image_url: string | null
+  stock: number
+  price: number | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface BanoProduct {
   id: string
   name: string

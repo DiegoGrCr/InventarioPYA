@@ -42,6 +42,14 @@ interface AccessoryRow {
   stock: number
 }
 
+interface ValvuleriaRow {
+  name: string
+  brand: string
+  bodega: string
+  stock: number
+  price: number | null
+}
+
 interface MeshRow {
   name: string
   brand: string
@@ -182,12 +190,14 @@ export async function buildInventoryWorkbook({
   cenefas,
   banos,
   accessories,
+  valvuleria,
 }: {
   items: PisoItem[]
   meshes: MeshRow[]
   cenefas: MeshRow[]
   banos: BanoRow[]
   accessories: AccessoryRow[]
+  valvuleria: ValvuleriaRow[]
 }) {
   const workbook = new ExcelJS.Workbook()
   const usedNames = new Set<string>()
@@ -240,6 +250,16 @@ export async function buildInventoryWorkbook({
       'Adhesivos',
       ['Producto', 'Categoría', 'Bodega', 'Stock'],
       accessories.map(a => [a.name, a.category === 'adhesivo' ? 'Adhesivo' : 'Boquilla', a.bodega, a.stock]),
+      usedNames
+    )
+  }
+
+  if (valvuleria.length > 0) {
+    addSimpleSheet(
+      workbook,
+      'Valvulería',
+      ['Producto', 'Marca', 'Bodega', 'Stock', 'Precio'],
+      valvuleria.map(v => [v.name, v.brand, v.bodega, v.stock, v.price ?? '']),
       usedNames
     )
   }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Layers, Package, Calculator, Toilet, Grid3x3, Rows3 } from 'lucide-react'
+import { LayoutDashboard, Layers, Package, Calculator, Toilet, Grid3x3, Rows3, Wrench } from 'lucide-react'
 
 const mobileItems = [
   { label: 'Inicio',       href: '/',             icon: LayoutDashboard },
@@ -11,6 +11,7 @@ const mobileItems = [
   { label: 'Cenefas',      href: '/cenefas',       icon: Rows3 },
   { label: 'Baños',        href: '/banos',         icon: Toilet },
   { label: 'Adhesivos',    href: '/complementos',  icon: Package },
+  { label: 'Valvulería',   href: '/valvuleria',    icon: Wrench },
   { label: 'Calculadora',  href: '/calculadora',   icon: Calculator },
 ]
 

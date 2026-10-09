@@ -10,7 +10,7 @@ import { requireAdmin } from '@/lib/auth'
 // de servicio para escribir en el bucket.
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_SIZE = 5 * 1024 * 1024 // 5MB, coincide con el límite que ya mostraba la UI
-const ALLOWED_FOLDERS = ['pisos', 'mallas', 'cenefas', 'banos', 'adhesivos', 'boquillas']
+const ALLOWED_FOLDERS = ['pisos', 'mallas', 'cenefas', 'banos', 'adhesivos', 'boquillas', 'valvuleria']
 
 export async function uploadImage(file: File, folder: string): Promise<{ url: string } | { error: string }> {
   const authError = await requireAdmin()
