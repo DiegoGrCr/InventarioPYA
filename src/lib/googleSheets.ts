@@ -1304,6 +1304,12 @@ const VISIBLE_COLS_VALVULERIA = { startColumnIndex: COL_VALVULERIA.FOTO, endColu
 // criterio que MESH_ZERO_STOCK_HIGHLIGHT_COLS.
 const VALVULERIA_ZERO_STOCK_HIGHLIGHT_COLS = { startColumnIndex: COL_VALVULERIA.MARCA, endColumnIndex: COL_VALVULERIA.COMENTARIOS + 1 }
 
+// A diferencia de Pisos/Mallas/Cenefas/Adhesivos, en Valvulería el personal
+// de CUALQUIER bodega (no solo las fullyEditable) puede editar DESCRIPCIÓN/
+// CANTIDAD/PRECIO/COMENTARIOS — el encargado de inventarios necesita poder
+// anotar comentarios y ajustar precio/nombre sin pasar por una bodega
+// especial. Solo FOTO/MARCA/SKU quedan protegidos siempre (SKU sí requiere
+// la bodega fullyEditable, igual que antes, por ser un identificador).
 export function buildValvuleriaProtectionRequests(sheetId: number, serviceAccountEmail: string, rowCount: number, fullyEditable = false): sheets_v4.Schema$Request[] {
   const editors = { users: [serviceAccountEmail] }
   const requests: sheets_v4.Schema$Request[] = []
@@ -1314,16 +1320,10 @@ export function buildValvuleriaProtectionRequests(sheetId: number, serviceAccoun
       description: 'FOTO/MARCA - solo lectura', warningOnly: false, editors,
     } } })
   } else {
-    requests.push(
-      { addProtectedRange: { protectedRange: {
-        range: { sheetId, startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.DESCRIPCION + 1 },
-        description: 'FOTO/MARCA/SKU/DESCRIPCIÓN - solo lectura', warningOnly: false, editors,
-      } } },
-      { addProtectedRange: { protectedRange: {
-        range: { sheetId, startColumnIndex: COL_VALVULERIA.PRECIO, endColumnIndex: COL_VALVULERIA.PRECIO + 1 },
-        description: 'PRECIO - solo lectura', warningOnly: false, editors,
-      } } },
-    )
+    requests.push({ addProtectedRange: { protectedRange: {
+      range: { sheetId, startColumnIndex: COL_VALVULERIA.FOTO, endColumnIndex: COL_VALVULERIA.SKU + 1 },
+      description: 'FOTO/MARCA/SKU - solo lectura', warningOnly: false, editors,
+    } } })
   }
 
   requests.push(
@@ -1338,10 +1338,7 @@ export function buildValvuleriaProtectionRequests(sheetId: number, serviceAccoun
   )
 
   const editableEndRow = 1 + rowCount
-  // FECHA_ACTUALIZACION queda libre SIEMPRE — ver el mismo campo en
-  // buildProtectionRequests (Pisos). COMENTARIOS en cambio sigue el mismo
-  // criterio que SKU/PRECIO: protegida por defecto, libre solo en bodegas
-  // fullyEditable (se sincroniza con la BDD, no es control 100% manual).
+  // FECHA_ACTUALIZACION y COMENTARIOS quedan libres SIEMPRE, en las 2 ramas.
   const fechaActualizacionRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION, endColumnIndex: COL_VALVULERIA.FECHA_ACTUALIZACION + 1 }
   const comentariosRange = { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.COMENTARIOS, endColumnIndex: COL_VALVULERIA.COMENTARIOS + 1 }
   const unprotectedRanges = fullyEditable
@@ -1351,8 +1348,10 @@ export function buildValvuleriaProtectionRequests(sheetId: number, serviceAccoun
         comentariosRange,
       ]
     : [
-        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.CANTIDAD, endColumnIndex: COL_VALVULERIA.CANTIDAD + 1 },
+        // DESCRIPCIÓN..PRECIO son columnas contiguas (3,4,5) — un solo rango.
+        { sheetId, startRowIndex: 1, endRowIndex: editableEndRow, startColumnIndex: COL_VALVULERIA.DESCRIPCION, endColumnIndex: COL_VALVULERIA.PRECIO + 1 },
         fechaActualizacionRange,
+        comentariosRange,
       ]
 
   requests.push({ addProtectedRange: { protectedRange: {
