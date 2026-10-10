@@ -44,17 +44,17 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
     supabase.from('products')
       .select('id, name, image_url, price_per_sqm, stock, brand:brands(name), size:sizes(label)')
       .eq('is_active', true)
-      .or(`name.ilike.${likeOr},description.ilike.${likeOr},color.ilike.${likeOr},finish.ilike.${likeOr}${sizeFilter}`)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},color.ilike.${likeOr},finish.ilike.${likeOr},sku.ilike.${likeOr}${sizeFilter}`)
       .limit(200),
     supabase.from('meshes')
       .select('id, name, image_url, price_per_sqm, stock, brand:brands(name), size:sizes(label)')
       .eq('is_active', true)
-      .or(`name.ilike.${likeOr},description.ilike.${likeOr},color.ilike.${likeOr},finish.ilike.${likeOr}${sizeFilter}`)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},color.ilike.${likeOr},finish.ilike.${likeOr},sku.ilike.${likeOr}${sizeFilter}`)
       .limit(200),
     supabase.from('cenefas')
       .select('id, name, image_url, price_per_sqm, stock, brand:brands(name), size:sizes(label)')
       .eq('is_active', true)
-      .or(`name.ilike.${likeOr},description.ilike.${likeOr},color.ilike.${likeOr},finish.ilike.${likeOr}${sizeFilter}`)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},color.ilike.${likeOr},finish.ilike.${likeOr},sku.ilike.${likeOr}${sizeFilter}`)
       .limit(200),
     supabase.from('bano_products')
       .select('id, name, image_url, price, stock, brand, model')
@@ -64,12 +64,12 @@ export default async function BuscarPage({ searchParams }: { searchParams: Promi
     supabase.from('accessories')
       .select('id, name, image_url, price, stock, category, brand')
       .eq('is_active', true)
-      .or(`name.ilike.${likeOr},description.ilike.${likeOr},brand.ilike.${likeOr},color.ilike.${likeOr}`)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},brand.ilike.${likeOr},color.ilike.${likeOr},sku.ilike.${likeOr}`)
       .limit(200),
     supabase.from('valvuleria')
       .select('id, name, image_url, price, stock, brand')
       .eq('is_active', true)
-      .or(`name.ilike.${likeOr},description.ilike.${likeOr},brand.ilike.${likeOr}`)
+      .or(`name.ilike.${likeOr},description.ilike.${likeOr},brand.ilike.${likeOr},sku.ilike.${likeOr}`)
       .limit(200),
   ])
 
